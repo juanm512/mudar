@@ -3,7 +3,11 @@ import { eq, sum } from "drizzle-orm"
 
 import { db, tokens, calculations } from "@mudar/db"
 import { TravelTimeProvider, NoCoverageError } from "@mudar/geo"
+import { ORPCError } from "@orpc/server"
 import { authedProcedure } from "./middleware"
+
+const INITIAL_TOKENS = 10
+const FREE_TRANSPORTS = new Set(["walking"])
 
 // ── geo.isochrone ─────────────────────────────────────────────────────────────
 
@@ -17,6 +21,23 @@ const geoIsochrone = authedProcedure
     })
   )
   .handler(async ({ input, context }) => {
+    const isFree = FREE_TRANSPORTS.has(input.transport)
+
+    // Verificar saldo ANTES de llamar a TravelTime (solo si no es gratis)
+    if (!isFree) {
+      const result = await db
+        .select({ total: sum(tokens.amount) })
+        .from(tokens)
+        .where(eq(tokens.userId, context.user.id))
+
+      const balance = Number(result[0]?.total ?? 0)
+      if (balance < 1) {
+        throw new ORPCError("FORBIDDEN", {
+          message: "Sin tokens suficientes",
+        })
+      }
+    }
+
     const provider = new TravelTimeProvider()
 
     let geojson
@@ -35,7 +56,7 @@ const geoIsochrone = authedProcedure
       throw err
     }
 
-    // Guardar en historial y descontar token
+    // Guardar en historial
     await db.insert(calculations).values({
       userId: context.user.id,
       lat: input.lat,
@@ -45,15 +66,20 @@ const geoIsochrone = authedProcedure
       geojson,
     })
 
-    await db.insert(tokens).values({
-      userId: context.user.id,
-      amount: -1,
-    })
+    // Descontar token solo si no es transporte gratuito
+    if (!isFree) {
+      await db.insert(tokens).values({
+        userId: context.user.id,
+        amount: -1,
+      })
+    }
 
     return geojson
   })
 
 // ── user.tokens ───────────────────────────────────────────────────────────────
+// Si el usuario nunca tuvo un registro de tokens (sum = null), se otorgan
+// los tokens iniciales de forma lazy en la primera consulta.
 
 const userTokens = authedProcedure.handler(async ({ context }) => {
   const result = await db
@@ -61,18 +87,16 @@ const userTokens = authedProcedure.handler(async ({ context }) => {
     .from(tokens)
     .where(eq(tokens.userId, context.user.id))
 
+  // sum() retorna null cuando no hay filas → primer acceso del usuario
+  if (result[0]?.total === null) {
+    await db.insert(tokens).values({
+      userId: context.user.id,
+      amount: INITIAL_TOKENS,
+    })
+    return { tokens: INITIAL_TOKENS }
+  }
+
   return { tokens: Number(result[0]?.total ?? 0) }
-})
-
-// ── user.deductToken ──────────────────────────────────────────────────────────
-
-const userDeductToken = authedProcedure.handler(async ({ context }) => {
-  await db.insert(tokens).values({
-    userId: context.user.id,
-    amount: -1,
-  })
-
-  return { success: true }
 })
 
 // ── user.history ──────────────────────────────────────────────────────────────
@@ -95,7 +119,6 @@ export const router = {
   },
   user: {
     tokens: userTokens,
-    deductToken: userDeductToken,
     history: userHistory,
   },
 }
