@@ -12,7 +12,13 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS
     ? env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
-    : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
+    : [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        // Extensiones de Chrome (desarrollo)
+        "chrome-extension://",
+      ],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: authSchema,
