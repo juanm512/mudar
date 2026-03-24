@@ -1,30 +1,56 @@
-<!-- Popup de Mudar — login/cuenta/tokens -->
 <script lang="ts">
-  // Estado reactivo con runes de Svelte 5
   let userEmail = $state<string | null>(null)
-  let tokenCount = $state(0)
+  let tokenCount = $state<number | null>(null)
   let isLoggedIn = $state(false)
+  let loading = $state(true)
 
-  // Cargar sesión desde localStorage al montar
+  const API_BASE = "http://localhost:3001"
+
   $effect(() => {
-    const stored = localStorage.getItem("mudar_session")
-    if (stored) {
-      try {
-        const session = JSON.parse(stored) as { email: string; tokens: number }
-        userEmail = session.email
-        tokenCount = session.tokens
-        isLoggedIn = true
-      } catch {
-        // Sesión corrupta, ignorar
-      }
-    }
+    loadSession()
   })
 
-  function handleLogout() {
-    localStorage.removeItem("mudar_session")
-    userEmail = null
-    tokenCount = 0
-    isLoggedIn = false
+  async function loadSession() {
+    loading = true
+    try {
+      const sessRes = await fetch(`${API_BASE}/api/auth/get-session`, {
+        credentials: "include",
+      })
+      if (!sessRes.ok) {
+        isLoggedIn = false
+        return
+      }
+      const sessData = await sessRes.json() as { user?: { email: string } } | null
+      if (!sessData?.user) {
+        isLoggedIn = false
+        return
+      }
+      userEmail = sessData.user.email
+      isLoggedIn = true
+
+      const tokRes = await fetch(`${API_BASE}/api/orpc/user.tokens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      })
+      if (tokRes.ok) {
+        const tokData = await tokRes.json() as { result?: { tokens: number } }
+        tokenCount = tokData.result?.tokens ?? 0
+      }
+    } catch {
+      isLoggedIn = false
+    } finally {
+      loading = false
+    }
+  }
+
+  function openDashboard() {
+    chrome.tabs.create({ url: `${API_BASE}/dashboard` })
+  }
+
+  function openSignIn() {
+    chrome.tabs.create({ url: `${API_BASE}/sign-in` })
   }
 </script>
 
@@ -34,30 +60,29 @@
     <span class="title">Mudar</span>
   </header>
 
-  {#if isLoggedIn}
+  {#if loading}
+    <div class="popup-body center">
+      <p class="muted">Cargando...</p>
+    </div>
+  {:else if isLoggedIn}
     <div class="popup-body">
       <div class="user-info">
         <span class="email">{userEmail}</span>
-        <button class="btn-link" onclick={handleLogout}>Cerrar sesión</button>
       </div>
       <div class="tokens">
-        <span class="token-count">{tokenCount}</span>
+        <span class="token-count">{tokenCount ?? "—"}</span>
         <span class="token-label">tokens disponibles</span>
       </div>
+      <button class="btn-primary" onclick={openDashboard}>
+        Ir al Dashboard
+      </button>
     </div>
   {:else}
     <div class="popup-body">
-      <p class="login-prompt">
-        Iniciá sesión para usar isócronas
-      </p>
-      <a
-        href="http://localhost:3000/sign-in"
-        target="_blank"
-        rel="noopener"
-        class="btn-primary"
-      >
+      <p class="login-prompt">Iniciá sesión para usar isócronas</p>
+      <button class="btn-primary" onclick={openSignIn}>
         Iniciar sesión
-      </a>
+      </button>
     </div>
   {/if}
 </main>
@@ -98,6 +123,17 @@
     gap: 12px;
   }
 
+  .center {
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+  }
+
+  .muted {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
   .user-info {
     display: flex;
     justify-content: space-between;
@@ -107,19 +143,7 @@
   .email {
     font-size: 12px;
     color: #374151;
-  }
-
-  .btn-link {
-    background: none;
-    border: none;
-    color: #1a56db;
-    cursor: pointer;
-    font-size: 11px;
-    padding: 0;
-  }
-
-  .btn-link:hover {
-    text-decoration: underline;
+    word-break: break-all;
   }
 
   .tokens {
@@ -148,14 +172,16 @@
 
   .btn-primary {
     display: block;
+    width: 100%;
     text-align: center;
     padding: 8px;
     background: #1a56db;
     color: #fff;
+    border: none;
     border-radius: 6px;
     font-size: 12px;
     font-weight: 600;
-    text-decoration: none;
+    cursor: pointer;
     transition: background 0.15s;
   }
 

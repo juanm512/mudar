@@ -8,6 +8,6 @@ export default defineConfig({
     name: "Mudar — Isócronas para inmobiliarias",
     description:
       "Filtrá propiedades por tiempo de viaje en ArgenProp y ZonaProp",
-    permissions: ["activeTab", "storage"],
+    permissions: ["activeTab", "storage", "tabs"],
   },
 })
