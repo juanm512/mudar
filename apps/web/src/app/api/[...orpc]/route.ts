@@ -1,15 +1,27 @@
-import { ORPCHandler } from "@orpc/server/node"
-import { router } from "@mudar/api"
+import { RPCHandler } from '@orpc/server/fetch'
+import { onError } from '@orpc/server'
+import { router } from '@mudar/api'
 
-const handler = new ORPCHandler(router)
+const handler = new RPCHandler(router, {
+  interceptors: [
+    onError((error) => {
+      console.error(error)
+    }),
+  ],
+})
 
 async function handleRequest(request: Request) {
   const { response } = await handler.handle(request, {
-    prefix: "/api",
+    prefix: '/api/orpc',
+    context: { headers: request.headers },
   })
 
-  return response ?? new Response("Not found", { status: 404 })
+  return response ?? new Response('Not found', { status: 404 })
 }
 
+export const HEAD = handleRequest
 export const GET = handleRequest
 export const POST = handleRequest
+export const PUT = handleRequest
+export const PATCH = handleRequest
+export const DELETE = handleRequest

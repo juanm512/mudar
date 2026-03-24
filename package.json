@@ -7,13 +7,21 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:generate": "pnpm -F @mudar/auth generate",
+    "db:push": "turbo -F @mudar/db push"
   },
   "devDependencies": {
     "@mudar/prettier-config": "workspace:*",
     "@mudar/typescript-config": "workspace:*",
+    "dotenv-cli": "^10.0.0",
     "prettier": "^3.5.3",
     "turbo": "^2.4.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "drizzle-orm": "^0.39.0"
+    }
   },
   "packageManager": "pnpm@9.15.1",
   "engines": {

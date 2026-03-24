@@ -1,9 +1,13 @@
-import { os } from "@orpc/server"
 import { z } from "zod"
+import { eq, sum } from "drizzle-orm"
 
-// ── Procedimientos de geo ────────────────────────────────────────────────────
+import { db, tokens, calculations } from "@mudar/db"
+import { TravelTimeProvider, NoCoverageError } from "@mudar/geo"
+import { authedProcedure } from "./middleware"
 
-const geoIsochrone = os
+// ── geo.isochrone ─────────────────────────────────────────────────────────────
+
+const geoIsochrone = authedProcedure
   .input(
     z.object({
       lat: z.number(),
@@ -12,41 +16,78 @@ const geoIsochrone = os
       transport: z.enum(["driving", "public_transport", "walking", "cycling"]),
     })
   )
-  .handler(async ({ input }) => {
-    // TODO: integrar con @mudar/geo TravelTimeProvider
-    // Placeholder que retorna un GeoJSON vacío
-    return {
-      type: "FeatureCollection" as const,
-      features: [],
-      _params: input,
+  .handler(async ({ input, context }) => {
+    const provider = new TravelTimeProvider()
+
+    let geojson
+    try {
+      geojson = await provider.isochrone({
+        lat: input.lat,
+        lng: input.lng,
+        timeSeconds: input.time,
+        transport: input.transport,
+      })
+    } catch (err) {
+      if (err instanceof NoCoverageError) {
+        // Zona sin cobertura — no descontar token
+        throw new Error("NO_COVERAGE")
+      }
+      throw err
     }
+
+    // Guardar en historial y descontar token
+    await db.insert(calculations).values({
+      userId: context.user.id,
+      lat: input.lat,
+      lng: input.lng,
+      timeSeconds: input.time,
+      transport: input.transport,
+      geojson,
+    })
+
+    await db.insert(tokens).values({
+      userId: context.user.id,
+      amount: -1,
+    })
+
+    return geojson
   })
 
-// ── Procedimientos de usuario ────────────────────────────────────────────────
+// ── user.tokens ───────────────────────────────────────────────────────────────
 
-const userTokens = os.handler(async () => {
-  // TODO: consultar tokens desde @mudar/db
-  return { tokens: 10 }
+const userTokens = authedProcedure.handler(async ({ context }) => {
+  const result = await db
+    .select({ total: sum(tokens.amount) })
+    .from(tokens)
+    .where(eq(tokens.userId, context.user.id))
+
+  return { tokens: Number(result[0]?.total ?? 0) }
 })
 
-const userDeductToken = os.handler(async () => {
-  // TODO: descontar token en @mudar/db
+// ── user.deductToken ──────────────────────────────────────────────────────────
+
+const userDeductToken = authedProcedure.handler(async ({ context }) => {
+  await db.insert(tokens).values({
+    userId: context.user.id,
+    amount: -1,
+  })
+
   return { success: true }
 })
 
-const userHistory = os.handler(async () => {
-  // TODO: consultar historial desde @mudar/db
-  return { calculations: [] as Array<{
-    id: string
-    lat: number
-    lng: number
-    timeSeconds: number
-    transport: string
-    createdAt: string
-  }> }
+// ── user.history ──────────────────────────────────────────────────────────────
+
+const userHistory = authedProcedure.handler(async ({ context }) => {
+  const rows = await db
+    .select()
+    .from(calculations)
+    .where(eq(calculations.userId, context.user.id))
+    .orderBy(calculations.createdAt)
+
+  return { calculations: rows }
 })
 
-// ── Router ───────────────────────────────────────────────────────────────────
+// ── Router ────────────────────────────────────────────────────────────────────
 
 export const router = {
   geo: {

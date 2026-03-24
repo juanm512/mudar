@@ -7,13 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate": "dotenv -e ../../.env -- pnpx @better-auth/cli generate --config ./src/index.ts --output ../db/src/auth-schema.ts"
   },
   "dependencies": {
     "better-auth": "^1.2.0",
     "@mudar/db": "workspace:*"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.2.0",
     "@mudar/typescript-config": "workspace:*",
     "typescript": "^5.8.2"
   }

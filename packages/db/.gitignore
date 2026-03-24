@@ -1,0 +1,2 @@
+# Generado por better-auth — regenerar con: pnpm db:generate
+src/auth-schema.ts

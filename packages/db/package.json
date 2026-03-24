@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./auth-schema": "./src/auth-schema.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "push": "drizzle-kit push",
-    "studio": "drizzle-kit studio"
+    "push": "pnpm with-env drizzle-kit push",
+    "studio": "pnpm with-env drizzle-kit studio",
+    "generate": "pnpm --filter @mudar/auth exec better-auth generate --config src/index.ts --output ../db/src/auth-schema.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.0",
