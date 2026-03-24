@@ -1,0 +1,15 @@
+{
+  "extends": "@mudar/typescript-config/svelte.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.svelte",
+    ".wxt/wxt.d.ts"
+  ],
+  "exclude": ["node_modules", ".output"]
+}

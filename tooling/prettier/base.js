@@ -19,10 +19,10 @@ export const baseConfig = {
     "^(react/(.*)$)|^(react$)",
     "^(next/(.*)$)|^(next$)",
     "^(@wxt-dev/(.*)$)|^(@wxt-dev$)",
-    "<THIRD_PARTY_MODULES>", // Imports not matched by other special words or groups.
+    "<THIRD_PARTY_MODULES>",
     "",
-    "<TYPES>^@repo",
-    "^@repo/(.*)$",
+    "<TYPES>^@mudar",
+    "^@mudar/(.*)$",
     "",
     "<TYPES>^[.|..|~]",
     "^~/",

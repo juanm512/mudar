@@ -1,0 +1,23 @@
+{
+  "name": "@mudar/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@orpc/server": "^1.0.0",
+    "@orpc/zod": "^1.0.0",
+    "zod": "^3.24.0",
+    "@mudar/db": "workspace:*",
+    "@mudar/geo": "workspace:*"
+  },
+  "devDependencies": {
+    "@mudar/typescript-config": "workspace:*",
+    "typescript": "^5.8.2"
+  }
+}

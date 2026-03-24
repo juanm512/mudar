@@ -1,0 +1,20 @@
+{
+  "name": "@mudar/auth",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-auth": "^1.2.0",
+    "@mudar/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@mudar/typescript-config": "workspace:*",
+    "typescript": "^5.8.2"
+  }
+}

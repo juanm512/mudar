@@ -1,5 +1,5 @@
 {
-  "name": "@repo/prettier-config",
+  "name": "@mudar/prettier-config",
   "version": "0.0.0",
   "type": "module",
   "private": true,
@@ -17,9 +17,9 @@
     "prettier-plugin-tailwindcss": "^0.6.11"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
+    "@mudar/typescript-config": "workspace:*",
     "@types/node": "^22.13.9",
     "typescript": "^5.8.2"
-  },    
-  "prettier": "@repo/prettier-config"
+  },
+  "prettier": "@mudar/prettier-config"
 }
