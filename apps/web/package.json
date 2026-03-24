@@ -18,6 +18,7 @@
     "@mudar/auth": "workspace:*",
     "@mudar/db": "workspace:*",
     "better-auth": "^1.2.0",
+    "@orpc/client": "^1.0.0",
     "@orpc/server": "^1.0.0",
     "@orpc/openapi": "^1.0.0"
   },
