@@ -4,16 +4,14 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 
-export function middleware(request: NextRequest) {
-  // Rutas protegidas que requieren autenticación
-  const protectedPaths = ["/dashboard"]
-  const isProtected = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  )
+import { auth } from "@mudar/auth"
 
-  if (isProtected) {
-    // TODO: verificar sesión con better-auth
-    // Por ahora, permitir acceso libre
+export async function middleware(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers })
+
+  if (!session) {
+    const signInUrl = new URL("/sign-in", request.url)
+    return NextResponse.redirect(signInUrl)
   }
 
   return NextResponse.next()
