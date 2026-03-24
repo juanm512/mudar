@@ -3,6 +3,7 @@
 
 import type { IGeoProvider, IsochroneParams, IsochroneResult, GeocodeResult } from "./types"
 import { NoCoverageError } from "./types"
+import { env } from "./env"
 
 const TRAVELTIME_BASE = "https://api.traveltimeapp.com/v4"
 
@@ -19,8 +20,8 @@ export class TravelTimeProvider implements IGeoProvider {
   private readonly apiKey: string
 
   constructor(appId?: string, apiKey?: string) {
-    this.appId = appId ?? process.env.TRAVELTIME_APP_ID ?? ""
-    this.apiKey = apiKey ?? process.env.TRAVELTIME_API_KEY ?? ""
+    this.appId = appId ?? env.TRAVELTIME_APP_ID
+    this.apiKey = apiKey ?? env.TRAVELTIME_API_KEY
   }
 
   async isochrone(params: IsochroneParams): Promise<IsochroneResult> {

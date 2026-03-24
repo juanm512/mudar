@@ -4,23 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start",
+    "with-env": "dotenv -e ../../.env --",
+    "dev": "pnpm with-env next dev --turbopack -H 0.0.0.0 -p 3001",
+    "build": "pnpm with-env next build",
+    "start": "pnpm with-env next start",
     "lint": "next lint --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^16.0.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "@mudar/api": "workspace:*",
     "@mudar/auth": "workspace:*",
     "@mudar/db": "workspace:*",
-    "better-auth": "^1.2.0",
     "@orpc/client": "^1.0.0",
     "@orpc/server": "^1.0.0",
-    "@orpc/openapi": "^1.0.0"
+    "@orpc/openapi": "^1.0.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "better-auth": "^1.2.0",
+    "next": "^16.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@mudar/eslint-config": "workspace:*",

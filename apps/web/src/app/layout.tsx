@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { Header } from "@/components/header"
-import "./globals.css"
+import "./styles.css"
 
 export const metadata: Metadata = {
   title: "Mudar — Buscá propiedades por tiempo de viaje",

@@ -7,8 +7,8 @@ import type { AppRouter } from "@mudar/api"
 const link = new RPCLink({
   url:
     typeof window !== "undefined"
-      ? "/api/orpc"
-      : "http://localhost:3000/api/orpc",
+      ? `${window.location.origin}/api/orpc`
+      : "http://localhost:3001/api/orpc",
 })
 
 export const orpc: RouterClient<AppRouter> = createORPCClient(link)
