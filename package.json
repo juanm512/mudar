@@ -1,0 +1,22 @@
+{
+  "name": "mudar",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "@mudar/prettier-config": "workspace:*",
+    "@mudar/typescript-config": "workspace:*",
+    "prettier": "^3.5.3",
+    "turbo": "^2.4.4"
+  },
+  "packageManager": "pnpm@9.15.1",
+  "engines": {
+    "node": ">=18"
+  }
+}
