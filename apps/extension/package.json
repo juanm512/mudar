@@ -16,7 +16,7 @@
     "@mudar/api": "workspace:*",
     "@orpc/client": "^1.0.0",
     "@orpc/server": "^1.0.0",
-    "@orpc/tanstack-query": "^1.0.0",
+    "@orpc/svelte-query": "^1.0.0",
     "@tanstack/svelte-query": "^5.0.0",
     "svelte": "^5.0.0"
   },

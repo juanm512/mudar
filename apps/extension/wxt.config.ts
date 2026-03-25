@@ -4,6 +4,14 @@ import { defineConfig } from "wxt"
 export default defineConfig({
   extensionApi: "chrome",
   modules: ["@wxt-dev/module-svelte"],
+  vite: () => ({
+    resolve: {
+      alias: { "@/": new URL("./src/", import.meta.url).pathname },
+    },
+    optimizeDeps: {
+      exclude: ["@tanstack/svelte-query"],
+    },
+  }),
   manifest: {
     name: "Mudar — Isócronas para inmobiliarias",
     description:
