@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, useCallback } from "react"
 
 import { useSession } from "@/lib/auth-client"
@@ -41,12 +41,14 @@ function formatArs(cents: number): string {
 
 export default function TokensPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { data: session, isPending } = useSession()
   const [balance, setBalance] = useState<number | null>(null)
   const [packs, setPacks] = useState<TokenPack[]>([])
   const [transactions, setTransactions] = useState<TokenTransaction[]>([])
   const [purchasing, setPurchasing] = useState<string | null>(null)
-  const [successPack, setSuccessPack] = useState<string | null>(null)
+
+  const paymentStatus = searchParams.get("payment")
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -65,20 +67,13 @@ export default function TokensPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  async function handlePurchase(packId: string, packName: string) {
+  async function handlePurchase(packId: string) {
     setPurchasing(packId)
-    setSuccessPack(null)
     try {
-      const { newBalancePlus } = await orpc.tokens.purchase({ packId })
-      setBalance(prev => (prev ?? 0) + newBalancePlus)
-      setSuccessPack(packName)
-      // Refresh transaction history
-      orpc.tokens.history(undefined).then(({ transactions }) =>
-        setTransactions(transactions as TokenTransaction[])
-      )
+      const { checkoutUrl } = await orpc.tokens.purchase({ packId })
+      window.location.href = checkoutUrl
     } catch (err) {
       console.error("Purchase failed:", err)
-    } finally {
       setPurchasing(null)
     }
   }
@@ -123,10 +118,15 @@ export default function TokensPage() {
           </div>
         </div>
 
-        {/* Success message */}
-        {successPack && (
+        {/* Mensajes de estado del pago */}
+        {paymentStatus === "success" && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            ✓ Pack <strong>{successPack}</strong> acreditado exitosamente.
+            ✓ Pago recibido. Los tokens serán acreditados en instantes.
+          </div>
+        )}
+        {paymentStatus === "cancelled" && (
+          <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+            El pago fue cancelado. Podés intentarlo nuevamente cuando quieras.
           </div>
         )}
 
@@ -173,9 +173,9 @@ export default function TokensPage() {
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                   disabled={purchasing !== null}
-                  onClick={() => handlePurchase(pack.id, pack.name)}
+                  onClick={() => handlePurchase(pack.id)}
                 >
-                  {purchasing === pack.id ? "Procesando..." : "Comprar"}
+                  {purchasing === pack.id ? "Redirigiendo..." : "Comprar"}
                 </button>
               </div>
             )
