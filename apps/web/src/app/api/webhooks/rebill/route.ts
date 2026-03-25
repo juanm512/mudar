@@ -128,17 +128,20 @@ export async function POST(req: Request) {
     return new Response("Orden no encontrada", { status: 404 })
   }
 
-  // Idempotencia: ignorar si ya fue procesada
-  if (order.status === "completed") {
-    return new Response("OK", { status: 200 })
-  }
-
-  await db
+  // Actualizar solo si está en "pending" — .returning() devuelve [] si ya estaba completed
+  // Esto evita race conditions entre webhooks duplicados sin necesitar un check previo
+  const updated = await db
     .update(tokenOrders)
     .set({ status: "completed", externalId: paymentId, paymentProvider: "rebill" })
     .where(
       and(eq(tokenOrders.id, orderId), eq(tokenOrders.status, "pending")),
     )
+    .returning({ id: tokenOrders.id })
+
+  if (updated.length === 0) {
+    // Ya fue procesado por una entrega anterior — idempotencia garantizada
+    return new Response("OK", { status: 200 })
+  }
 
   await db.insert(tokens).values({
     userId: order.userId,
