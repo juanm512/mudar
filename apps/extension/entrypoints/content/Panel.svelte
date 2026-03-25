@@ -178,6 +178,10 @@
     hasResults = false
     resultCount = null
 
+    // Limpiar capas previas y restaurar el marcador de origen
+    onClear()
+    onSetOrigin(lat, lng)
+
     const transports = [...selectedTransports]
     try {
       const results = await Promise.all(
@@ -247,15 +251,22 @@
   }
 
   // ── Drag ──────────────────────────────────────────────────────────────────
-  function onHeaderMouseDown(e: MouseEvent) {
+  function startDrag(e: MouseEvent, el: HTMLElement) {
     isDragging = true
-    const panel = (e.currentTarget as HTMLElement).parentElement!
-    const rect = panel.getBoundingClientRect()
+    const rect = el.getBoundingClientRect()
     dragOffsetX = e.clientX - rect.left
     dragOffsetY = e.clientY - rect.top
     document.addEventListener("mousemove", onDocMouseMove)
     document.addEventListener("mouseup", onDocMouseUp)
     e.preventDefault()
+  }
+
+  function onHeaderMouseDown(e: MouseEvent) {
+    startDrag(e, (e.currentTarget as HTMLElement).parentElement!)
+  }
+
+  function onMiniMouseDown(e: MouseEvent) {
+    startDrag(e, e.currentTarget as HTMLElement)
   }
 
   function onDocMouseMove(e: MouseEvent) {
@@ -508,13 +519,29 @@
     </div>
   </div>
 {:else}
-  <button
-    class="btn-expand"
-    style="top:{panelY}px;{panelX !== null ? `left:${panelX}px;right:auto` : 'right:12px'}"
-    onclick={() => (minimized = false)}
+  <div
+    class="panel-mini"
+    style="top:{panelY}px;{panelX !== null ? `left:${panelX}px;right:auto` : 'right:12px'};cursor:{isDragging ? 'grabbing' : 'grab'}"
+    onmousedown={onMiniMouseDown}
+    role="toolbar"
+    tabindex="-1"
   >
-    Mudar ▲
-  </button>
+    <span class="panel-title">Mudar</span>
+    <div class="mini-actions">
+      <button
+        class="mini-btn"
+        title={markersVisible ? "Ocultar propiedades" : "Mostrar propiedades"}
+        onmousedown={(e) => e.stopPropagation()}
+        onclick={toggleMarkers}
+      >{markersVisible ? "🙈" : "👁"}</button>
+      <button
+        class="mini-expand"
+        title="Abrir panel"
+        onmousedown={(e) => e.stopPropagation()}
+        onclick={() => (minimized = false)}
+      >⊞</button>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -523,6 +550,9 @@
   .panel {
     position: fixed;
     width: 310px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
@@ -570,7 +600,7 @@
   }
   .tab-btn:hover:not(.tab-active) { color: #374151; }
 
-  .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
 
   .field { display: flex; flex-direction: column; gap: 5px; }
 
@@ -730,13 +760,40 @@
   }
   .btn-load-history:hover { background: #dbeafe; }
 
-  .btn-expand {
-    position: fixed; padding: 6px 12px; background: #1a56db;
-    color: #fff; border: none; border-radius: 8px;
-    font-size: 12px; font-weight: 600; cursor: pointer; z-index: 9999;
+  /* Mini panel (minimizado) */
+  .panel-mini {
+    position: fixed;
+    width: 310px;
+    background: #1a56db;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    z-index: 9999;
+    color: #fff;
+    user-select: none;
     pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
   }
+
+  .mini-actions { display: flex; align-items: center; gap: 6px; }
+
+  .mini-btn {
+    background: none; border: none; color: #fff; cursor: pointer;
+    font-size: 15px; padding: 3px 5px; opacity: 0.85; border-radius: 5px;
+    line-height: 1;
+  }
+  .mini-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+
+  .mini-expand {
+    background: rgba(255,255,255,0.2); border: none; color: #fff;
+    cursor: pointer; font-size: 15px; padding: 3px 7px;
+    border-radius: 6px; line-height: 1;
+  }
+  .mini-expand:hover { background: rgba(255,255,255,0.35); }
 
   /* Loading overlay */
   .loading-overlay {
