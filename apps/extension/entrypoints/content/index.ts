@@ -134,7 +134,11 @@ export default defineContentScript({
 
       // Click en mapa para pick de origen
       argenContainer.addEventListener("click", async (e) => {
-        if (!mapPickCallback) return
+        const cb = mapPickCallback
+        if (!cb) return
+        // Limpiar inmediatamente para evitar doble-disparo durante el await
+        mapPickCallback = null
+        argenContainer.style.cursor = ""
         const ref = getTileRef(argenContainer)
         if (!ref) return
         const rect = argenContainer.getBoundingClientRect()
@@ -142,9 +146,7 @@ export default defineContentScript({
         const pxY = e.clientY - rect.top
         const { lat, lng } = containerPxToLatLng(pxX, pxY, ref)
         const label = await reverseGeocode(lat, lng)
-        mapPickCallback(lat, lng, label)
-        mapPickCallback = null
-        argenContainer.style.cursor = ""
+        cb(lat, lng, label)
       })
 
       // Montar panel

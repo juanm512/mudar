@@ -5,8 +5,6 @@
     createQuery,
     createMutation,
   } from "@tanstack/svelte-query"
-  import type { CreateQueryOptions } from "@tanstack/svelte-query"
-  import { writable, derived } from "svelte/store"
   import { orpc, api } from "@/api"
   import type { GeoJSON } from "./overlay"
 
@@ -52,32 +50,16 @@
     lon: string
   }
 
-  // ── Sesión (fetch directo a better-auth) ─────────────────────────────────
-  let session = $state<{ email: string } | null>(null)
-  // Store separado para alimentar createQuery (StoreOrVal no acepta función)
-  const _sessionEnabled = writable(false)
-
-  $effect(() => {
-    fetch("http://localhost:3001/api/auth/get-session", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { user?: { email: string } } | null) => {
-        session = d?.user ? { email: d.user.email } : null
-        _sessionEnabled.set(session !== null)
-      })
-      .catch(() => { session = null; _sessionEnabled.set(false) })
-  })
-
   // ── TanStack Query: tokens ────────────────────────────────────────────────
-  const _tokensOpts = derived(
-    _sessionEnabled,
-    (enabled): CreateQueryOptions<{ tokens: number }> => ({
-      ...orpc.user.tokens.queryOptions(),
-      enabled,
-    })
-  )
-  const tokensQuery = createQuery(_tokensOpts)
+  // El background hace el fetch con credentials → no hay CORS desde el content script
+  const tokensQuery = createQuery(orpc.user.tokens.queryOptions())
 
   const tokens = $derived(($tokensQuery.data as { tokens: number } | undefined)?.tokens ?? null)
+  // Logueado si tokens cargaron sin error de autenticación
+  const loggedIn = $derived(
+    $tokensQuery.data !== undefined ||
+    ($tokensQuery.isError && ($tokensQuery.error as { code?: string })?.code !== "UNAUTHORIZED")
+  )
 
   // ── TanStack Query: isócrona mutation ────────────────────────────────────
   const isochrone = createMutation({
@@ -96,7 +78,7 @@
 
   const isFree = $derived(transport === "walking")
   const canCalculate = $derived(
-    session !== null &&
+    loggedIn &&
     !$isochrone.isPending &&
     (isFree || (tokens !== null && tokens > 0))
   )
@@ -328,7 +310,7 @@
 
       <!-- Tokens / sesión -->
       <div class="tokens-row">
-        {#if session}
+        {#if loggedIn}
           {#if $tokensQuery.isLoading}
             <span class="tokens-label muted">Cargando tokens...</span>
           {:else}
