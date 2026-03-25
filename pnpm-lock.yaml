@@ -243,6 +243,22 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
+  packages/rebill:
+    dependencies:
+      '@t3-oss/env-core':
+        specifier: ^0.11.0
+        version: 0.11.1(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@mudar/typescript-config':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
   tooling/eslint:
     devDependencies:
       '@eslint/js':
