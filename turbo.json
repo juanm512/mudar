@@ -43,6 +43,9 @@
     "RESEND_FROM_EMAIL",
     "LOCATIONIQ_API_KEY",
     "OPENROUTESERVICE_API_KEY",
+    "REBILL_API_KEY",
+    "REBILL_ORGANIZATION_ID",
+    "REBILL_WEBHOOK_SECRET",
     "PORT"
   ],
   "globalPassThroughEnv": [

@@ -149,6 +149,7 @@ const tokensPurchase = authedProcedure
       packName: pack.name,
       priceArsCents: pack.priceArs,
       tokens: pack.tokens,
+      userEmail: context.user.email,
     })
 
     return { checkoutUrl, orderId: order!.id, newBalancePlus: pack.tokens }

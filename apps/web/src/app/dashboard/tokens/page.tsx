@@ -129,6 +129,11 @@ export default function TokensPage() {
             El pago fue cancelado. Podés intentarlo nuevamente cuando quieras.
           </div>
         )}
+        {paymentStatus === "pending" && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Pago en proceso. Los tokens serán acreditados cuando se confirme.
+          </div>
+        )}
 
         {/* Packs grid */}
         <div className="mb-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

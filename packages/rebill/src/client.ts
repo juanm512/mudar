@@ -3,7 +3,7 @@
 
 import { env } from "./env"
 
-const REBILL_BASE = "https://api.rebill.com/v2"
+const REBILL_BASE = "https://api.rebill.com/v3"
 
 export interface CreatePaymentLinkParams {
   orderId: string
@@ -13,6 +13,8 @@ export interface CreatePaymentLinkParams {
   priceArsCents: number
   /** Tokens que otorga el pack (solo informativo para el título) */
   tokens: number
+  /** Email del usuario para pre-completar el checkout */
+  userEmail?: string
 }
 
 export interface CreatePaymentLinkResult {
@@ -23,29 +25,45 @@ export interface CreatePaymentLinkResult {
 export async function createPaymentLink(
   params: CreatePaymentLinkParams,
 ): Promise<CreatePaymentLinkResult> {
-  const { orderId, userId, packName, priceArsCents, tokens } = params
+  const { orderId, userId, packName, priceArsCents, tokens, userEmail } = params
 
-  const appUrl = env.NEXT_PUBLIC_APP_URL
+  const appUrl = env.APP_URL
   const priceInArs = priceArsCents / 100
 
   const body = {
-    title: `Mudar — ${packName} (${tokens} tokens)`,
-    currency: "ARS",
-    price: priceInArs,
+    type: "instant",
+    title: [
+      { text: `Mudar — ${packName} (${tokens} tokens)`, language: "es" },
+      { text: `Mudar — ${packName} (${tokens} tokens)`, language: "en" },
+    ],
+    prices: [
+      { amount: priceInArs, currency: "ARS" },
+    ],
+    paymentMethods: [
+      { methods: ["card", "bank_transfer"], currency: "ARS" },
+    ],
+    redirectUrls: {
+      approved: `${appUrl}/dashboard/tokens?payment=success`,
+      rejected: `${appUrl}/dashboard/tokens?payment=cancelled`,
+      pending: `${appUrl}/dashboard/tokens?payment=pending`,
+    },
+    isSingleUse: true,
     metadata: {
       orderId,
       userId,
     },
-    redirect_url: `${appUrl}/dashboard/tokens?payment=success`,
-    cancel_url: `${appUrl}/dashboard/tokens?payment=cancelled`,
-    organization_id: env.REBILL_ORGANIZATION_ID,
+    ...(userEmail && {
+      prefilledFields: {
+        customer: { email: userEmail },
+      },
+    }),
   }
 
   const response = await fetch(`${REBILL_BASE}/payment-links`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${env.REBILL_API_KEY}`,
+      "x-api-key": env.REBILL_SECRET_KEY,
     },
     body: JSON.stringify(body),
   })
@@ -60,17 +78,14 @@ export async function createPaymentLink(
   const data = (await response.json()) as {
     id: string
     url: string
-    checkout_url?: string
   }
 
-  const checkoutUrl = data.checkout_url ?? data.url
-
-  if (!checkoutUrl) {
+  if (!data.url) {
     throw new Error("Rebill no devolvió una URL de checkout válida")
   }
 
   return {
-    checkoutUrl,
+    checkoutUrl: data.url,
     paymentLinkId: data.id,
   }
 }

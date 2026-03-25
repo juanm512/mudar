@@ -3,9 +3,8 @@ import { z } from "zod"
 
 export const env = createEnv({
   server: {
-    REBILL_API_KEY: z.string().min(1),
-    REBILL_ORGANIZATION_ID: z.string().min(1),
-    NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3001"),
+    REBILL_SECRET_KEY: z.string().min(1),
+    APP_URL: z.string().url().default("http://localhost:3001"),
   },
   runtimeEnv: process.env,
 })

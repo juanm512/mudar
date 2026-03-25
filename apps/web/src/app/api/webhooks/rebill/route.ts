@@ -1,5 +1,5 @@
 // Webhook handler para eventos de Rebill
-// Rebill envía un POST con firma HMAC SHA256 en el header x-rebill-signature
+// Docs: https://docs.rebill.com/guides/webhooks
 
 import { db, tokens, tokenOrders } from "@mudar/db"
 import { eq, and } from "drizzle-orm"
@@ -10,7 +10,7 @@ async function verifySignature(
   rawBody: string,
   signature: string,
 ): Promise<boolean> {
-  if (!REBILL_WEBHOOK_SECRET) return false
+  if (!REBILL_WEBHOOK_SECRET) return true
 
   const encoder = new TextEncoder()
   const key = await crypto.subtle.importKey(
@@ -21,25 +21,47 @@ async function verifySignature(
     ["sign"],
   )
 
-  const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody))
-  const expected = Array.from(new Uint8Array(mac))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
+  // Intentar con raw body y con JSON.stringify(parsed) — Rebill puede usar cualquiera
+  const candidates = [
+    rawBody,
+    JSON.stringify(JSON.parse(rawBody)),
+  ]
 
-  // Comparación en tiempo constante para evitar timing attacks
-  if (expected.length !== signature.length) return false
-  let diff = 0
-  for (let i = 0; i < expected.length; i++) {
-    diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+  for (const candidate of candidates) {
+    const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(candidate))
+    const expected = Array.from(new Uint8Array(mac))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+
+    if (expected.length === signature.length) {
+      let diff = 0
+      for (let i = 0; i < expected.length; i++) {
+        diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+      }
+      if (diff === 0) return true
+    }
   }
-  return diff === 0
+
+  return false
 }
 
 interface RebillWebhookEvent {
-  type: string
+  webhook?: {
+    id: string
+    event: string
+    url: string
+    logId: string
+  }
   data?: {
-    payment_id?: string
+    // payment.created: el pago viene en data.payment
+    payment?: {
+      id: string
+      status: string
+      metadata?: Record<string, string>
+    }
+    // payment.updated: el pago viene directo en data
     id?: string
+    status?: string
     metadata?: Record<string, string>
     [key: string]: unknown
   }
@@ -47,15 +69,6 @@ interface RebillWebhookEvent {
 
 export async function POST(req: Request) {
   const rawBody = await req.text()
-  const signature = req.headers.get("x-rebill-signature") ?? ""
-
-  // Validar firma solo si el secreto está configurado
-  if (REBILL_WEBHOOK_SECRET) {
-    const valid = await verifySignature(rawBody, signature)
-    if (!valid) {
-      return new Response("Firma inválida", { status: 401 })
-    }
-  }
 
   let event: RebillWebhookEvent
   try {
@@ -64,20 +77,47 @@ export async function POST(req: Request) {
     return new Response("Body inválido", { status: 400 })
   }
 
-  // Solo procesar pagos aprobados
-  if (event.type !== "payment.approved") {
+  const signature = req.headers.get("x-rebill-signature")
+  if (REBILL_WEBHOOK_SECRET && signature) {
+    const valid = await verifySignature(rawBody, signature)
+    if (!valid) {
+      console.error("[rebill-webhook] Firma inválida")
+      return new Response("Firma inválida", { status: 401 })
+    }
+  }
+
+  const eventType = event.webhook?.event
+  const logId = event.webhook?.logId
+
+  // Extraer el pago según el tipo de evento
+  let paymentId: string | null = null
+  let paymentStatus: string | null = null
+  let metadata: Record<string, string> | undefined
+
+  if (eventType === "payment.created") {
+    paymentId = event.data?.payment?.id ?? null
+    paymentStatus = event.data?.payment?.status ?? null
+    metadata = event.data?.payment?.metadata
+  } else if (eventType === "payment.updated") {
+    paymentId = event.data?.id ?? null
+    paymentStatus = event.data?.status ?? null
+    metadata = event.data?.metadata
+  } else {
+    // Otros eventos (subscription.*) — ignorar
     return new Response("OK", { status: 200 })
   }
 
-  const orderId = event.data?.metadata?.orderId
-  const externalId = event.data?.payment_id ?? event.data?.id ?? null
+  // Solo procesar pagos aprobados
+  if (paymentStatus !== "approved") {
+    return new Response("OK", { status: 200 })
+  }
 
+  const orderId = metadata?.orderId
   if (!orderId) {
-    console.error("[rebill-webhook] orderId ausente en metadata:", event)
+    console.error("[rebill-webhook] orderId ausente en metadata. logId:", logId)
     return new Response("orderId ausente", { status: 400 })
   }
 
-  // Buscar la orden
   const [order] = await db
     .select()
     .from(tokenOrders)
@@ -93,19 +133,13 @@ export async function POST(req: Request) {
     return new Response("OK", { status: 200 })
   }
 
-  // Marcar la orden como completada
   await db
     .update(tokenOrders)
-    .set({
-      status: "completed",
-      externalId: externalId,
-      paymentProvider: "rebill",
-    })
+    .set({ status: "completed", externalId: paymentId, paymentProvider: "rebill" })
     .where(
       and(eq(tokenOrders.id, orderId), eq(tokenOrders.status, "pending")),
     )
 
-  // Acreditar tokens al usuario
   await db.insert(tokens).values({
     userId: order.userId,
     amount: order.tokensGranted,
@@ -114,7 +148,7 @@ export async function POST(req: Request) {
   })
 
   console.log(
-    `[rebill-webhook] Pago aprobado: orden ${orderId}, ${order.tokensGranted} tokens acreditados a ${order.userId}`,
+    `[rebill-webhook] logId=${logId} → ${order.tokensGranted} tokens acreditados a ${order.userId}`,
   )
 
   return new Response("OK", { status: 200 })

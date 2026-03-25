@@ -3,7 +3,10 @@
     "allow": [
       "WebFetch(domain:github.com)",
       "WebFetch(domain:orpc.dev)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:rebill.com)",
+      "WebFetch(domain:developers.rebill.com)",
+      "WebFetch(domain:docs.rebill.com)"
     ]
   }
 }
