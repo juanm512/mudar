@@ -3,9 +3,9 @@ import { tokenPacks } from "./schema"
 
 async function seed() {
   await db.insert(tokenPacks).values([
-    { name: "Starter",  tokens: 25,   priceArs: 99900 },
-    { name: "Pro",      tokens: 100,  priceArs: 299900 },
-    { name: "Business", tokens: 500,  priceArs: 999900 },
+    { name: "Starter",  tokens: 5,   priceArs: 900000 },
+    { name: "Pro",      tokens: 10,  priceArs: 1600000 },
+    { name: "Business", tokens: 22,  priceArs: 3000000 },
   ]).onConflictDoNothing()
   console.log("Token packs seeded ✅")
   process.exit(0)
