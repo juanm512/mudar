@@ -16,7 +16,8 @@
     "zod": "^3.24.0",
     "@mudar/auth": "workspace:*",
     "@mudar/db": "workspace:*",
-    "@mudar/geo": "workspace:*"
+    "@mudar/geo": "workspace:*",
+    "@mudar/rebill": "workspace:*"
   },
   "devDependencies": {
     "@mudar/typescript-config": "workspace:*",

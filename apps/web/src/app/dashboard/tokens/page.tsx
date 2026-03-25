@@ -69,8 +69,8 @@ export default function TokensPage() {
     setPurchasing(packId)
     setSuccessPack(null)
     try {
-      const { newBalance } = await orpc.tokens.purchase({ packId })
-      setBalance(newBalance)
+      const { newBalancePlus } = await orpc.tokens.purchase({ packId })
+      setBalance(prev => (prev ?? 0) + newBalancePlus)
       setSuccessPack(packName)
       // Refresh transaction history
       orpc.tokens.history(undefined).then(({ transactions }) =>

@@ -151,6 +151,9 @@ importers:
       '@mudar/geo':
         specifier: workspace:*
         version: link:../geo
+      '@mudar/rebill':
+        specifier: workspace:*
+        version: link:../rebill
       '@orpc/server':
         specifier: ^1.0.0
         version: 1.13.10(@opentelemetry/api@1.9.0)

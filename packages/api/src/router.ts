@@ -3,6 +3,7 @@ import { eq, sum } from "drizzle-orm"
 
 import { db, tokens, calculations, tokenPacks, tokenOrders } from "@mudar/db"
 import { TravelTimeProvider, NoCoverageError } from "@mudar/geo"
+import { createPaymentLink } from "@mudar/rebill"
 import { ORPCError } from "@orpc/server"
 import { authedProcedure } from "./middleware"
 
@@ -128,7 +129,7 @@ const tokensPurchase = authedProcedure
       throw new ORPCError("NOT_FOUND", { message: "Pack no encontrado" })
     }
 
-    // Crear orden (compra simulada — status: completed directo)
+    // Crear orden en estado "pending" — se completará vía webhook de Rebill
     const [order] = await db
       .insert(tokenOrders)
       .values({
@@ -136,28 +137,21 @@ const tokensPurchase = authedProcedure
         packId: pack.id,
         tokensGranted: pack.tokens,
         pricePaid: pack.priceArs,
-        status: "completed",
-        paymentProvider: "fake",
+        status: "pending",
+        paymentProvider: "rebill",
       })
       .returning()
 
-    // Acreditar tokens con referencia a la orden
-    await db.insert(tokens).values({
-      userId: context.user.id,
-      amount: pack.tokens,
-      reason: "purchase",
+    // Generar Payment Link de un solo uso en Rebill
+    const { checkoutUrl } = await createPaymentLink({
       orderId: order!.id,
+      userId: context.user.id,
+      packName: pack.name,
+      priceArsCents: pack.priceArs,
+      tokens: pack.tokens,
     })
 
-    // Recalcular balance para devolver al client
-    const result = await db
-      .select({ total: sum(tokens.amount) })
-      .from(tokens)
-      .where(eq(tokens.userId, context.user.id))
-
-    const newBalance = Number(result[0]?.total ?? 0)
-
-    return { order, newBalance }
+    return { checkoutUrl, orderId: order!.id, newBalancePlus: pack.tokens }
   })
 
 // ── tokens.history ────────────────────────────────────────────────────────────
