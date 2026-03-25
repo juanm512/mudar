@@ -5,7 +5,7 @@ import "./styles.css"
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mudarg.com"
 const description =
-  "Encontrá tu próximo hogar en Argentina usando isócronas. Buscá propiedades según cuánto tardás en llegar a donde importa."
+  "Encontrá tu próximo hogar filtrando por zonas en los portales de busqueda de propiedades. Mudarg te muestra propiedades según cuánto tardás en llegar a donde importa."
 
 export const metadata: Metadata = {
   title: "Mudarg — Buscá propiedades por tiempo de viaje",

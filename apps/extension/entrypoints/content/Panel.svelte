@@ -390,6 +390,10 @@
           <span class="results-sub">propiedades a {timeMinutes} min</span>
         </div>
 
+        {#if address}
+          <p class="results-address">📍 {address.length > 60 ? address.slice(0, 60) + "…" : address}</p>
+        {/if}
+
         <div class="layers-list">
           {#each resultTransports as transport (transport)}
             {@const color = TRANSPORT_COLORS[transport] ?? "#1a56db"}
@@ -638,7 +642,7 @@
     role="toolbar"
     tabindex="-1"
   >
-    <span class="panel-title">Mudar</span>
+    <span class="panel-title">Mudarg</span>
     <div class="mini-actions">
       <button
         class="mini-btn"
@@ -885,6 +889,11 @@
   }
   .results-number { font-size: 42px; font-weight: 800; color: var(--color-primary); line-height: 1; }
   .results-sub { font-size: 12px; color: var(--color-muted-foreground); }
+  .results-address {
+    font-size: 11px; color: var(--color-muted-foreground);
+    text-align: center; margin: 0 0 4px; padding: 0 4px;
+    line-height: 1.4; word-break: break-word;
+  }
 
   .layers-list { display: flex; flex-direction: column; gap: 6px; }
 

@@ -2,7 +2,7 @@ import Link from "next/link"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Mudarg — Mejorá tu búsqueda en Argenprop y ZonaProp",
+  title: "Mudarg — Buscá propiedades por tiempo de viaje",
   description: "Una extensión de navegador que suma datos útiles directamente al mapa para que encuentres tu hogar más rápido.",
   icons: {
     icon: "/favicon.ico",

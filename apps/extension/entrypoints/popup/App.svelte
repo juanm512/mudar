@@ -130,7 +130,7 @@
     </div>
   {:else}
     <div class="popup-body">
-      <p class="login-prompt">Iniciá sesión para usar isócronas</p>
+      <p class="login-prompt">Iniciá sesión para usar Mudarg</p>
       <button class="btn-primary" onclick={openSignIn}>
         Iniciar sesión
       </button>

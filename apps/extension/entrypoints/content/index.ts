@@ -231,7 +231,7 @@ export default defineContentScript({
         top: "0", left: "0",
         width: "100%", height: "100%",
         pointerEvents: "none",
-        // zIndex: "500",
+        // zIndex: "401", // por encima de overlay pane (400) pero por debajo del popup pane (700)
       })
       argenContainer.appendChild(overlayDiv)
 

@@ -13,21 +13,21 @@ export default defineConfig({
     },
   }),
   manifest: {
-    name: "Mudarg — Isócronas para inmobiliarias",
+    name: "Mudarg — Buscá propiedades por tiempo de viaje",
     description:
-      "Filtrá propiedades por tiempo de viaje en ArgenProp y ZonaProp",
+      "Enriquecé tu búsqueda en portales inmobiliarios",
     permissions: ["activeTab", "storage", "tabs"],
     host_permissions: ["http://localhost:3001/*"],
     icons: {
-      16: "icon-16.png",
-      48: "icon-48.png",
-      128: "icon-128.png",
+      16: "icon16.png",
+      48: "icon48.png",
+      128: "icon128.png",
     },
     action: {
       default_icon: {
-        16: "icon-16.png",
-        48: "icon-48.png",
-        128: "icon-128.png",
+        16: "icon16.png",
+        48: "icon48.png",
+        128: "icon128.png",
       },
     },
   },
