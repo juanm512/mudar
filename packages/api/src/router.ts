@@ -7,7 +7,7 @@ import { createPaymentLink } from "@mudar/rebill"
 import { ORPCError } from "@orpc/server"
 import { authedProcedure } from "./middleware"
 
-const INITIAL_TOKENS = 10
+const INITIAL_TOKENS = 2
 
 // ── geo.isochrone ─────────────────────────────────────────────────────────────
 

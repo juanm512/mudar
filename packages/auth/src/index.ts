@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth"
+import { emailHarmony } from "better-auth-harmony"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { createAuthClient } from "better-auth/client"
 
@@ -32,6 +33,9 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 días
     updateAge: 60 * 60 * 24, // actualizar cada 24hs
   },
+  plugins: [
+    emailHarmony(),
+  ],
 })
 
 export const authClient = createAuthClient({

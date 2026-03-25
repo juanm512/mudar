@@ -74,41 +74,6 @@ export default defineContentScript({
       return inside
     }
 
-    function pointInPolygon(lng: number, lat: number, outerRings: number[][][]) {
-      return outerRings.some(ring => pointInRing(lng, lat, ring))
-    }
-
-    function filterMarkersWithRings(container: HTMLElement, ringGroups: number[][][][]): number {
-      const ref = getTileRef(container)
-      if (!ref) return 0
-      if (ringGroups.length === 0) return 0
-      const markers = container.querySelectorAll(".leaflet-marker-icon") as NodeListOf<HTMLElement>
-      let count = 0
-      markers.forEach((m) => {
-        const rect = m.getBoundingClientRect()
-        const ax = rect.left + rect.width / 2 - ref.containerRect.left
-        const ay = rect.top + rect.height - ref.containerRect.top
-        const { lat, lng } = containerPxToLatLng(ax, ay, ref)
-        const inside = ringGroups.some(r => pointInPolygon(lng, lat, r))
-        m.style.display = inside ? "" : "none"
-        if (inside) count++
-      })
-      return count
-    }
-
-    function filterMarkersAll(container: HTMLElement): number {
-      return filterMarkersWithRings(container, [...allPolyRings.values()])
-    }
-
-    function waitForArgenMap(cb: (container: HTMLElement, mapPane: HTMLElement) => void | Promise<void>, retries = 40) {
-      const container = document.querySelector(".leaflet-container") as HTMLElement | null
-      const mapPane = container?.querySelector(".leaflet-map-pane") as HTMLElement | null
-      const tile = container?.querySelector(".leaflet-tile") as HTMLImageElement | null
-      if (mapPane && tile?.src) { cb(container!, mapPane); return }
-      if (retries <= 0) { console.warn("[Mudar] mapa no encontrado"); return }
-      setTimeout(() => waitForArgenMap(cb, retries - 1), 500)
-    }
-
     // ── Reverse geocoding ─────────────────────────────────────────────────
 
     async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -122,11 +87,20 @@ export default defineContentScript({
       }
     }
 
+    function waitForArgenMap(cb: (container: HTMLElement, mapPane: HTMLElement) => void | Promise<void>, retries = 40) {
+      const container = document.querySelector(".leaflet-container") as HTMLElement | null
+      const mapPane = container?.querySelector(".leaflet-map-pane") as HTMLElement | null
+      const tile = container?.querySelector(".leaflet-tile") as HTMLImageElement | null
+      if (mapPane && tile?.src) { cb(container!, mapPane); return }
+      if (retries <= 0) { console.warn("[Mudar] mapa no encontrado"); return }
+      setTimeout(() => waitForArgenMap(cb, retries - 1), 500)
+    }
+
     // ── Estado del overlay ─────────────────────────────────────────────────
 
     // Capas por transporte
     const geoLayers = new Map<string, ReturnType<typeof L.geoJSON>>()
-    const allPolyRings = new Map<string, number[][][]>()
+    const allPolyRings = new Map<string, { ring: number[][], minLng: number, maxLng: number, minLat: number, maxLat: number }[]>()
     const hiddenLayersSet = new Set<string>()
 
     let panelInstance: { setResultCount?: (n: number) => void } | null = null
@@ -135,6 +109,80 @@ export default defineContentScript({
     // Leaflet overlay map (nuestro propio mapa Leaflet, sincronizado con ArgenProp)
     let ourMap: ReturnType<typeof L.map> | null = null
     let originMarker: ReturnType<typeof L.circleMarker> | null = null
+
+    // ── Filtrado Asíncrono por Chunks ──────────────────────────────────────
+    let filterVersion = 0
+    function startAsyncFilter(container: HTMLElement) {
+      const version = ++filterVersion
+      const visibleRings = [...allPolyRings.entries()]
+        .filter(([t]) => !hiddenLayersSet.has(t))
+        .map(([, r]) => r)
+      
+      const markers = Array.from(container.querySelectorAll(".leaflet-marker-icon") as NodeListOf<HTMLElement>)
+      
+      if (!markersVisible) {
+        markers.forEach(m => { m.style.visibility = "hidden"; m.style.pointerEvents = "none"; m.style.opacity = "0" })
+        return
+      }
+
+      if (visibleRings.length === 0) {
+        markers.forEach(m => { m.style.visibility = ""; m.style.pointerEvents = ""; m.style.opacity = "1" })
+        return
+      }
+
+      const ref = getTileRef(container)
+      if (!ref) return
+      
+      // Batch READ Síncrono: leemos todas las posiciones de un tirón (0 reflows)
+      const markersData = markers.map(m => {
+        const rect = m.getBoundingClientRect()
+        const ax = rect.left + rect.width / 2 - ref.containerRect.left
+        const ay = rect.top + rect.height - ref.containerRect.top
+        const { lat, lng } = containerPxToLatLng(ax, ay, ref)
+        return { m, lat, lng }
+      })
+
+      let count = 0
+      let i = 0
+      const CHUNK_SIZE = 10 // Podemos subirlo porque la matemática es puramente JS
+
+      function processChunk() {
+        if (version !== filterVersion) return // Cancelado por una corrida más nueva
+        const end = Math.min(i + CHUNK_SIZE, markersData.length)
+
+        for (let j = i; j < end; j++) {
+          const { m, lat, lng } = markersData[j]!
+          let inside = false
+          
+          for (const polyGroup of visibleRings) {
+            for (const { ring, minLng, maxLng, minLat, maxLat } of polyGroup) {
+              // BBox Fast check O(1)
+              if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
+                if (pointInRing(lng, lat, ring)) {
+                  inside = true
+                  break
+                }
+              }
+            }
+            if (inside) break
+          }
+
+          // Batch WRITE: Aplicamos al DOM en el mismo frame
+          m.style.visibility = inside ? "" : "hidden"
+          m.style.pointerEvents = inside ? "" : "none"
+          m.style.opacity = inside ? "1" : "0" // transición suave
+          if (inside) count++
+        }
+
+        i = end
+        if (i < markersData.length) {
+          setTimeout(processChunk, 2) // Yield al event loop
+        } else {
+          panelInstance?.setResultCount?.(count)
+        }
+      }
+      processChunk()
+    }
 
     // ── Modo pick de mapa ─────────────────────────────────────────────────
 
@@ -255,13 +303,20 @@ export default defineContentScript({
                   geoLayers.set(transport, layer)
                   originMarker?.bringToFront()
                 }
-                allPolyRings.set(transport, polyRings)
+                const cachedPolyRings = polyRings.map(ring => {
+                  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+                  for (let i = 0; i < ring.length; i++) {
+                    const [lng, lat] = ring[i]!;
+                    if (lng < minLng) minLng = lng;
+                    if (lng > maxLng) maxLng = lng;
+                    if (lat < minLat) minLat = lat;
+                    if (lat > maxLat) maxLat = lat;
+                  }
+                  return { ring, minLng, minLat, maxLng, maxLat }
+                })
+                allPolyRings.set(transport, cachedPolyRings)
                 if (markersVisible) {
-                  // Mostrar todos primero para que getBoundingClientRect() funcione
-                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                    .forEach((m) => (m.style.display = ""))
-                  const count = filterMarkersAll(argenContainer)
-                  panelInstance?.setResultCount?.(count)
+                  startAsyncFilter(argenContainer)
                 }
               },
               onClear() {
@@ -271,7 +326,12 @@ export default defineContentScript({
                 hiddenLayersSet.clear()
                 if (originMarker) { originMarker.remove(); originMarker = null }
                 argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                  .forEach((m) => (m.style.display = ""))
+                  .forEach((m) => {
+                    m.style.display = ""
+                    m.style.visibility = ""
+                    m.style.pointerEvents = ""
+                    m.style.opacity = "1"
+                  })
               },
               onSetOrigin(lat: number | null, lng: number | null) {
                 if (originMarker) { originMarker.remove(); originMarker = null }
@@ -295,31 +355,11 @@ export default defineContentScript({
                   hiddenLayersSet.add(transport)
                   geoLayers.get(transport)?.remove()
                 }
-                const visibleRings = [...allPolyRings.entries()]
-                  .filter(([t]) => !hiddenLayersSet.has(t))
-                  .map(([, r]) => r)
-                argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                  .forEach(m => (m.style.display = ""))
-                if (markersVisible && visibleRings.length > 0) {
-                  const count = filterMarkersWithRings(argenContainer, visibleRings)
-                  panelInstance?.setResultCount?.(count)
-                } else if (visibleRings.length === 0) {
-                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                    .forEach(m => (m.style.display = ""))
-                }
+                startAsyncFilter(argenContainer)
               },
               onToggleMarkers(visible: boolean) {
                 markersVisible = visible
-                // Siempre mostrar primero para que getBoundingClientRect() funcione
-                argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                  .forEach((m) => (m.style.display = ""))
-                if (!visible) {
-                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                    .forEach((m) => (m.style.display = "none"))
-                } else if (allPolyRings.size > 0) {
-                  const count = filterMarkersAll(argenContainer)
-                  panelInstance?.setResultCount?.(count)
-                }
+                startAsyncFilter(argenContainer)
               },
             },
           }) as typeof panelInstance
@@ -332,37 +372,42 @@ export default defineContentScript({
       if (cached) console.log("[Mudar] caché disponible")
 
       // ── MutationObservers para sincronizar overlay en pan/zoom ────────
-      const syncCallback = () => {
+
+      // Sync de vista (solo posición/zoom del overlay) — sin filtrado, muy barato
+      const syncView = () => {
         const state = getMapState(argenContainer)
-        if (!state) return
-        if (ourMap) {
+        if (state && ourMap)
           ourMap.setView([state.lat, state.lng], state.zoom, { animate: false, duration: 0 })
-        }
-        if (allPolyRings.size > 0) {
-          // Mostrar todos primero para que getBoundingClientRect() sea correcto
-          argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-            .forEach((m) => (m.style.display = ""))
-          if (markersVisible) {
-            const count = filterMarkersAll(argenContainer)
-            panelInstance?.setResultCount?.(count)
-          } else {
-            argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-              .forEach((m) => (m.style.display = "none"))
-          }
-        } else if (!markersVisible) {
-          argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-            .forEach((m) => (m.style.display = "none"))
-        }
       }
 
-      const panObserver = new MutationObserver(syncCallback)
+      // Filtrado RAF-debounced — solo cuando aparecen nuevas listings
+      let filterRaf: ReturnType<typeof setTimeout> | null = null
+      const scheduleFilter = () => {
+        if (filterRaf !== null) return
+        filterRaf = setTimeout(() => {
+          filterRaf = null
+          if (allPolyRings.size === 0) return
+          startAsyncFilter(argenContainer)
+        }, 50)
+      }
+
+      // Pan/zoom → solo sync de vista (no filtrar en cada frame)
+      const panObserver = new MutationObserver(syncView)
       panObserver.observe(mapPane, { attributes: true, attributeFilter: ["style"] })
 
       const tilePane = argenContainer.querySelector(".leaflet-tile-pane")
       const markerPane = argenContainer.querySelector(".leaflet-marker-pane")
-      const domObserver = new MutationObserver(syncCallback)
-      if (tilePane) domObserver.observe(tilePane, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] })
-      if (markerPane) domObserver.observe(markerPane, { childList: true, subtree: true })
+
+      // Tiles → sync de vista (cambios de zoom actualizan las tiles)
+      const tileObserver = new MutationObserver(syncView)
+      if (tilePane) tileObserver.observe(tilePane, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] })
+
+      // Nuevos markers → re-filtrar (nuevas listings al desplazar el mapa)
+      const markerObserver = new MutationObserver((mutations) => {
+        const hasNew = mutations.some(m => m.addedNodes.length > 0)
+        if (hasNew) scheduleFilter()
+      })
+      if (markerPane) markerObserver.observe(markerPane, { childList: true, subtree: true })
 
       console.log("[Mudar] observers conectados ✅")
 
@@ -370,8 +415,7 @@ export default defineContentScript({
       window.__mudar = {
         getMapState: () => getMapState(argenContainer),
         getTileRef: () => getTileRef(argenContainer),
-        filterMarkersAll: () => filterMarkersAll(argenContainer),
-        pointInPolygon,
+        startAsyncFilter: () => startAsyncFilter(argenContainer),
         ourMap: () => ourMap,
       }
     })

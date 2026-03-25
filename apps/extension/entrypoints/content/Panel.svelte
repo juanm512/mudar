@@ -232,6 +232,14 @@
     viewMode = "form"
     resultTransports = []
     hiddenLayers = new Set()
+    
+    // Reset form fields
+    address = ""
+    selectedLat = null
+    selectedLng = null
+    timeMinutes = 30
+    selectedTransports = new Set(["walking"])
+    
     onClear()
   }
 
@@ -244,7 +252,8 @@
 
   async function loadFromHistory(entry: CacheEntry) {
     isLoadingHistory = true
-    await tick()
+    // Ensure the browser has time to render the loading overlay before the heavy parsing blocks the main thread
+    await new Promise(resolve => setTimeout(resolve, 50))
     selectedLat = entry.params.lat
     selectedLng = entry.params.lng
     if (entry.params.address) address = entry.params.address
@@ -354,7 +363,8 @@
       <button class="btn-minimize" onclick={() => (minimized = true)} title="Minimizar">−</button>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs — ocultas cuando hay un cálculo activo -->
+    {#if viewMode === "form"}
     <div class="tabs">
       <button
         class="tab-btn"
@@ -367,6 +377,7 @@
         onclick={() => { activeTab = "history"; loadHistory() }}
       >Historial</button>
     </div>
+    {/if}
 
     <div class="panel-body">
 
@@ -376,7 +387,7 @@
         <!-- ── Vista de resultados ──────────────────────────────────────── -->
         <div class="results-count">
           <span class="results-number">{resultCount ?? "—"}</span>
-          <span class="results-sub">propiedades en zona</span>
+          <span class="results-sub">propiedades a {timeMinutes} min</span>
         </div>
 
         <div class="layers-list">
@@ -660,7 +671,7 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 13px;
-    z-index: 9999;
+    z-index: 2147483646;
     color: #111827;
     user-select: none;
     pointer-events: auto;
@@ -722,7 +733,7 @@
   .tooltip {
     display: none;
     position: absolute;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%);
     background: #1f2937;
@@ -732,7 +743,7 @@
     padding: 6px 8px;
     border-radius: 6px;
     white-space: nowrap;
-    z-index: 10001;
+    z-index: 2147483647;
     pointer-events: none;
     text-align: center;
   }
@@ -755,7 +766,7 @@
     position: absolute; top: 100%; left: 0; right: 0;
     background: #fff; border: 1px solid #d1d5db; border-top: none;
     border-radius: 0 0 7px 7px; max-height: 160px; overflow-y: auto;
-    z-index: 10000; list-style: none; margin: 0; padding: 0;
+    z-index: 2147483647; list-style: none; margin: 0; padding: 0;
   }
 
   .suggestion-item {
@@ -950,7 +961,7 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 13px;
-    z-index: 9999;
+    z-index: 2147483646;
     color: #fff;
     user-select: none;
     pointer-events: auto;
@@ -984,7 +995,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10002;
+    z-index: 2147483647;
     border-radius: 12px;
     backdrop-filter: blur(2px);
   }

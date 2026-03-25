@@ -138,7 +138,7 @@ export default function TokensPage() {
         {/* Packs grid */}
         <div className="mb-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {packs.map((pack) => {
-            const isPro = pack.name === "Pro"
+            const isPro = pack.name === "Búsqueda completa"
             return (
               <div
                 key={pack.id}
@@ -172,7 +172,7 @@ export default function TokensPage() {
                 </p>
 
                 <button
-                  className={`mt-auto pt-6 w-full rounded-lg py-2.5 text-sm font-semibold transition-colors ${
+                  className={`mt-auto w-full rounded-lg py-2.5 text-sm font-semibold transition-colors ${
                     isPro
                       ? "bg-primary text-white hover:bg-primary/90"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"

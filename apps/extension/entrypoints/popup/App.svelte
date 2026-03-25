@@ -75,7 +75,7 @@
 
   {#if sessionLoading}
     <div class="popup-body center">
-      <p class="muted">Cargando...</p>
+      <div class="loading-logo">M</div>
     </div>
   {:else if session}
     <div class="popup-body">
@@ -197,4 +197,19 @@
     font-size: 11px; cursor: pointer; text-decoration: underline;
   }
   .btn-link:hover { color: #1a56db; }
+
+  /* Loading Logo */
+  .loading-logo {
+    font-size: 42px;
+    font-weight: 900;
+    color: #1a56db;
+    line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    animation: mudar-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes mudar-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.82); }
+  }
 </style>
