@@ -17,11 +17,13 @@
   // ── Props ─────────────────────────────────────────────────────────────────
   interface Props {
     getMapCenter: () => { lat: number; lng: number } | null
-    onCalculate: (geojson: GeoJSON, polyRings: number[][][]) => void
+    onCalculate: (geojson: GeoJSON, polyRings: number[][][], lat: number, lng: number) => void
     onClear: () => void
     onActivateMapPick: (cb: (lat: number, lng: number, label: string) => void) => void
+    onToggleMarkers: (visible: boolean) => void
+    onSetOrigin: (lat: number | null, lng: number | null) => void
   }
-  const { getMapCenter, onCalculate, onClear, onActivateMapPick }: Props = $props()
+  const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onSetOrigin }: Props = $props()
 
   // ── Estado UI ─────────────────────────────────────────────────────────────
   let minimized = $state(false)
@@ -40,6 +42,13 @@
   let timeMinutes = $state(30)
   let transport = $state<"walking" | "cycling" | "driving" | "public_transport">("walking")
   let resultCount = $state<number | null>(null)
+  let markersVisible = $state(true)
+  let calculationOrigin = $state<{ lat: number; lng: number } | null>(null)
+
+  function toggleMarkers() {
+    markersVisible = !markersVisible
+    onToggleMarkers(markersVisible)
+  }
 
   let debounceTimer: ReturnType<typeof setTimeout>
 
@@ -67,12 +76,17 @@
       api.geo.isochrone(params),
   })
 
+  // Notificar cambio de origen al overlay
+  $effect(() => {
+    onSetOrigin(selectedLat, selectedLng)
+  })
+
   // Cuando hay resultado de isócrona, disparar el dibujo del overlay
   $effect(() => {
-    if ($isochrone.data) {
+    if ($isochrone.data && calculationOrigin) {
       const geojson = $isochrone.data as GeoJSON
       const rings = extractRings(geojson)
-      onCalculate(geojson, rings)
+      onCalculate(geojson, rings, calculationOrigin.lat, calculationOrigin.lng)
     }
   })
 
@@ -80,6 +94,8 @@
   const canCalculate = $derived(
     loggedIn &&
     !$isochrone.isPending &&
+    selectedLat !== null &&
+    selectedLng !== null &&
     (isFree || (tokens !== null && tokens > 0))
   )
   // silence unused import warning
@@ -121,22 +137,17 @@
 
   // ── Calcular ──────────────────────────────────────────────────────────────
   function calculate() {
-    let lat = selectedLat
-    let lng = selectedLng
+    const lat = selectedLat
+    const lng = selectedLng
+    if (lat === null || lng === null) return
 
-    if (lat === null || lng === null) {
-      const center = getMapCenter()
-      if (!center) return
-      lat = center.lat
-      lng = center.lng
-    }
-
+    calculationOrigin = { lat, lng }
     $isochrone.mutate(
       { lat, lng, time: timeMinutes * 60, transport },
       {
         onSuccess: () => {
           if (!isFree) {
-            void queryClient.invalidateQueries({ queryKey: ["user", "tokens"] })
+            void queryClient.invalidateQueries({ queryKey: orpc.user.tokens.queryOptions().queryKey })
           }
         },
       }
@@ -146,6 +157,7 @@
   function handleClear() {
     $isochrone.reset()
     resultCount = null
+    calculationOrigin = null
     onClear()
   }
 
@@ -339,6 +351,11 @@
         {/if}
       </div>
 
+      <!-- Toggle marcadores -->
+      <button class="btn-toggle-markers" onclick={toggleMarkers}>
+        {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
+      </button>
+
       <!-- Estado / resultado -->
       {#if $isochrone.isError}
         {#if ($isochrone.error as Error)?.message === "NO_COVERAGE"}
@@ -383,6 +400,7 @@
     z-index: 9999;
     color: #111827;
     user-select: none;
+    pointer-events: auto;
   }
 
   .panel-header {
@@ -526,10 +544,18 @@
   .msg-error { font-size: 12px; color: #dc2626; text-align: center; margin: 0; }
   .msg-success { font-size: 12px; color: #16a34a; text-align: center; margin: 0; }
 
+  .btn-toggle-markers {
+    width: 100%; padding: 7px; background: #f9fafb;
+    border: 1px solid #e5e7eb; border-radius: 7px;
+    font-size: 12px; color: #374151; cursor: pointer; text-align: center;
+  }
+  .btn-toggle-markers:hover { background: #f3f4f6; }
+
   .btn-expand {
     position: fixed; padding: 6px 12px; background: #1a56db;
     color: #fff; border: none; border-radius: 8px;
     font-size: 12px; font-weight: 600; cursor: pointer; z-index: 9999;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    pointer-events: auto;
   }
 </style>

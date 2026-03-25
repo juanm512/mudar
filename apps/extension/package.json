@@ -18,11 +18,13 @@
     "@orpc/server": "^1.0.0",
     "@orpc/svelte-query": "^1.0.0",
     "@tanstack/svelte-query": "^5.0.0",
+    "leaflet": "^1.9.4",
     "svelte": "^5.0.0"
   },
   "devDependencies": {
     "@mudar/typescript-config": "workspace:*",
     "@types/chrome": "^0.0.280",
+    "@types/leaflet": "^1.9.0",
     "@wxt-dev/module-svelte": "^2.0.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.0.0",

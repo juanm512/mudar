@@ -1,7 +1,7 @@
-// Content script de Mudar — panel lateral + overlay SVG + filtrado de markers
+// Content script de Mudar — panel lateral + overlay Leaflet + filtrado de markers
 import { mount } from "svelte"
+import L from "leaflet"
 import Panel from "./Panel.svelte"
-import { drawGeoJSON, clearOverlay, updateOverlay } from "./overlay"
 import type { GeoJSON, TileRef } from "./overlay"
 import { saveToCache, getLastCache } from "./cache"
 
@@ -13,6 +13,7 @@ export default defineContentScript({
     "*://zonaprop.com.ar/*",
   ],
   runAt: "document_idle",
+  cssInjectionMode: "ui",
 
   main(ctx) {
     console.log("[Mudar] content script cargado ✅")
@@ -87,7 +88,7 @@ export default defineContentScript({
       return count
     }
 
-    function waitForArgenMap(cb: (container: HTMLElement, mapPane: HTMLElement) => void, retries = 40) {
+    function waitForArgenMap(cb: (container: HTMLElement, mapPane: HTMLElement) => void | Promise<void>, retries = 40) {
       const container = document.querySelector(".leaflet-container") as HTMLElement | null
       const mapPane = container?.querySelector(".leaflet-map-pane") as HTMLElement | null
       const tile = container?.querySelector(".leaflet-tile") as HTMLImageElement | null
@@ -114,6 +115,12 @@ export default defineContentScript({
     let currentGeojson: GeoJSON | null = null
     let currentPolyRings: number[][][] = []
     let panelInstance: { setResultCount?: (n: number) => void } | null = null
+    let markersVisible = true
+
+    // Leaflet overlay map (nuestro propio mapa Leaflet, sincronizado con ArgenProp)
+    let ourMap: ReturnType<typeof L.map> | null = null
+    let geoLayer: ReturnType<typeof L.geoJSON> | null = null
+    let originMarker: ReturnType<typeof L.circleMarker> | null = null
 
     // ── Modo pick de mapa ─────────────────────────────────────────────────
 
@@ -129,14 +136,70 @@ export default defineContentScript({
 
     // ── Inicialización ─────────────────────────────────────────────────────
 
-    waitForArgenMap((argenContainer, mapPane) => {
+    // Inyectar CSS mínimo de Leaflet para los panes del overlay (scoped a #mudar-overlay)
+    if (!document.getElementById("mudar-leaflet-css")) {
+      const style = document.createElement("style")
+      style.id = "mudar-leaflet-css"
+      style.textContent = `
+        #mudar-overlay { overflow: hidden; }
+        #mudar-overlay .leaflet-pane,
+        #mudar-overlay .leaflet-top,
+        #mudar-overlay .leaflet-bottom { position: absolute; z-index: 400; pointer-events: none; }
+        #mudar-overlay .leaflet-pane { left: 0; top: 0; }
+        #mudar-overlay .leaflet-tile-pane { z-index: 200; }
+        #mudar-overlay .leaflet-overlay-pane { z-index: 400; }
+        #mudar-overlay .leaflet-overlay-pane svg { -moz-user-select: none; }
+        #mudar-overlay .leaflet-zoom-animated { -webkit-transform-origin: 0 0; transform-origin: 0 0; }
+        #mudar-overlay .leaflet-zoom-anim .leaflet-zoom-animated { will-change: transform; }
+        #mudar-overlay .leaflet-zoom-anim .leaflet-zoom-animated { -webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1); -moz-transition: -moz-transform 0.25s cubic-bezier(0,0,0.25,1); transition: transform 0.25s cubic-bezier(0,0,0.25,1); }
+        #mudar-overlay path.leaflet-interactive { cursor: pointer; }
+        #mudar-overlay .leaflet-container { background: transparent; }
+      `
+      document.head.appendChild(style)
+    }
+
+    waitForArgenMap(async (argenContainer, mapPane) => {
       console.log("[Mudar] mapa detectado ✅")
 
-      // Click en mapa para pick de origen
+      // Asegurar que el container sea position:relative para el overlay
+      // argenContainer.style.position = "relative"
+
+      // ── Crear overlay Leaflet ──────────────────────────────────────────
+      const overlayDiv = document.createElement("div")
+      overlayDiv.id = "mudar-overlay"
+      Object.assign(overlayDiv.style, {
+        position: "absolute",
+        top: "0", left: "0",
+        width: "100%", height: "100%",
+        pointerEvents: "none",
+        // zIndex: "500",
+      })
+      argenContainer.appendChild(overlayDiv)
+
+      const initial = getMapState(argenContainer) ?? { lat: -34.6, lng: -58.38, zoom: 13 }
+      ourMap = L.map(overlayDiv, {
+        center: [initial.lat, initial.lng],
+        zoom: initial.zoom,
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        touchZoom: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        fadeAnimation: false,
+        markerZoomAnimation: false,
+      })
+      // Tile layer transparente — Leaflet necesita uno para inicializar la proyección
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { opacity: 0 }).addTo(ourMap)
+
+      console.log("[Mudar] overlay Leaflet creado ✅")
+
+      // ── Click en mapa para pick de origen ────────────────────────────
       argenContainer.addEventListener("click", async (e) => {
         const cb = mapPickCallback
         if (!cb) return
-        // Limpiar inmediatamente para evitar doble-disparo durante el await
         mapPickCallback = null
         argenContainer.style.cursor = ""
         const ref = getTileRef(argenContainer)
@@ -149,31 +212,77 @@ export default defineContentScript({
         cb(lat, lng, label)
       })
 
-      // Montar panel
-      const ui = createIntegratedUi(ctx, {
+      // ── Montar panel ──────────────────────────────────────────────────
+      const ui = await createShadowRootUi(ctx, {
+        name: "mudar-panel",
         position: "inline",
+        anchor: "body",
+        append: "last",
         onMount(container) {
           panelInstance = mount(Panel, {
             target: container,
             props: {
               getMapCenter: () => getMapState(argenContainer),
               onActivateMapPick: (cb) => activateMapPick(argenContainer, cb),
-              onCalculate(geojson: GeoJSON, polyRings: number[][][]) {
+              onCalculate(geojson: GeoJSON, polyRings: number[][][], originLat: number, originLng: number) {
                 currentGeojson = geojson
                 currentPolyRings = polyRings
-                const ref = getTileRef(argenContainer)
-                if (ref) drawGeoJSON(argenContainer, geojson, ref)
-                const count = filterMarkers(argenContainer, polyRings)
-                panelInstance?.setResultCount?.(count)
+                // Dibujar polígono con nuestro Leaflet
+                if (geoLayer) { geoLayer.remove(); geoLayer = null }
+                if (ourMap) {
+                  geoLayer = L.geoJSON(geojson as Parameters<typeof L.geoJSON>[0], {
+                    interactive: false,
+                    style: {
+                      color: "#1a56db",
+                      fillColor: "#1a56db",
+                      fillOpacity: 0.18,
+                      weight: 2.5,
+                      dashArray: "8 5",
+                    },
+                  }).addTo(ourMap)
+                  // Traer el marcador de origen al frente del polígono
+                  originMarker?.bringToFront()
+                }
+                if (markersVisible) {
+                  const count = filterMarkers(argenContainer, polyRings)
+                  panelInstance?.setResultCount?.(count)
+                }
                 const center = getMapState(argenContainer)
                 if (center) saveToCache({ lat: center.lat, lng: center.lng, time: 0, transport: "unknown" }, geojson)
               },
               onClear() {
                 currentGeojson = null
                 currentPolyRings = []
-                clearOverlay(argenContainer)
+                if (geoLayer) { geoLayer.remove(); geoLayer = null }
+                if (originMarker) { originMarker.remove(); originMarker = null }
                 argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
                   .forEach((m) => (m.style.display = ""))
+              },
+              onSetOrigin(lat: number | null, lng: number | null) {
+                if (originMarker) { originMarker.remove(); originMarker = null }
+                if (lat !== null && lng !== null && ourMap) {
+                  originMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    color: "#ffffff",
+                    weight: 3,
+                    fillColor: "#1a56db",
+                    fillOpacity: 1,
+                    interactive: false,
+                  }).addTo(ourMap)
+                }
+              },
+              onToggleMarkers(visible: boolean) {
+                markersVisible = visible
+                // Siempre mostrar primero para que getBoundingClientRect() funcione
+                argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+                  .forEach((m) => (m.style.display = ""))
+                if (!visible) {
+                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+                    .forEach((m) => (m.style.display = "none"))
+                } else if (currentPolyRings.length > 0) {
+                  const count = filterMarkers(argenContainer, currentPolyRings)
+                  panelInstance?.setResultCount?.(count)
+                }
               },
             },
           }) as typeof panelInstance
@@ -185,14 +294,27 @@ export default defineContentScript({
       const cached = getLastCache()
       if (cached) console.log("[Mudar] caché disponible")
 
-      // MutationObservers para sincronizar overlay en pan/zoom
+      // ── MutationObservers para sincronizar overlay en pan/zoom ────────
       const syncCallback = () => {
-        if (!currentGeojson || currentPolyRings.length === 0) return
-        const ref = getTileRef(argenContainer)
-        if (ref) {
-          updateOverlay(argenContainer, currentGeojson, ref)
-          const count = filterMarkers(argenContainer, currentPolyRings)
-          panelInstance?.setResultCount?.(count)
+        const state = getMapState(argenContainer)
+        if (!state) return
+        if (ourMap) {
+          ourMap.setView([state.lat, state.lng], state.zoom, { animate: false, duration: 0 })
+        }
+        if (currentPolyRings.length > 0) {
+          // Mostrar todos primero para que getBoundingClientRect() sea correcto
+          argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+            .forEach((m) => (m.style.display = ""))
+          if (markersVisible) {
+            const count = filterMarkers(argenContainer, currentPolyRings)
+            panelInstance?.setResultCount?.(count)
+          } else {
+            argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+              .forEach((m) => (m.style.display = "none"))
+          }
+        } else if (!markersVisible) {
+          argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+            .forEach((m) => (m.style.display = "none"))
         }
       }
 
@@ -213,6 +335,7 @@ export default defineContentScript({
         getTileRef: () => getTileRef(argenContainer),
         filterMarkers: (rings: number[][][]) => filterMarkers(argenContainer, rings),
         pointInPolygon,
+        ourMap: () => ourMap,
       }
     })
   },
