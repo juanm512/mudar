@@ -41,12 +41,29 @@
   )
   const tokensQuery = createQuery(_tokensOpts)
 
+  const tokenCount = $derived(
+    ($tokensQuery.data as { tokens: number } | undefined)?.tokens ?? null
+  )
+  const tokenBarPct = $derived(
+    tokenCount === null ? 0 : Math.min(tokenCount / 10, 1) * 100
+  )
+  const tokenBarColor = $derived(
+    tokenCount === null ? "#93c5fd"
+      : tokenCount === 0 ? "#dc2626"
+      : tokenCount <= 3 ? "#f97316"
+      : "#16a34a"
+  )
+
   function openDashboard() {
     chrome.tabs.create({ url: `${API_BASE}/dashboard` })
   }
 
   function openSignIn() {
     chrome.tabs.create({ url: `${API_BASE}/sign-in` })
+  }
+
+  function openTokens() {
+    chrome.tabs.create({ url: `${API_BASE}/dashboard/tokens` })
   }
 </script>
 
@@ -65,15 +82,51 @@
       <div class="user-info">
         <span class="email">{session.email}</span>
       </div>
+
+      <!-- Saldo de tokens -->
       <div class="tokens">
-        <span class="token-count">
-          {$tokensQuery.isLoading ? "…" : (($tokensQuery.data as { tokens: number } | undefined)?.tokens ?? "—")}
+        <span class="token-count" style="color:{tokenBarColor}">
+          {$tokensQuery.isLoading ? "…" : (tokenCount ?? "—")}
         </span>
-        <span class="token-label">tokens disponibles</span>
+        <div class="token-meta">
+          <span class="token-label">
+            {#if tokenCount === 0}
+              sin tokens
+            {:else if tokenCount !== null && tokenCount <= 3}
+              tokens — ¡casi sin saldo!
+            {:else}
+              tokens disponibles
+            {/if}
+          </span>
+          <!-- Barra de progreso -->
+          <div class="token-bar-bg">
+            <div
+              class="token-bar-fill"
+              style="width:{tokenBarPct}%;background:{tokenBarColor}"
+            ></div>
+          </div>
+        </div>
       </div>
+
+      <!-- Pill informativo del pack Pro -->
+      <div class="pack-pill">
+        ⚡ 10 tokens por <strong>$16.000</strong>
+      </div>
+
       <button class="btn-primary" onclick={openDashboard}>
         Ir al Dashboard
       </button>
+
+      <!-- CTA de compra contextual -->
+      {#if tokenCount !== null && tokenCount <= 3}
+        <button class="btn-buy" onclick={openTokens}>
+          ⚡ Comprar tokens
+        </button>
+      {:else}
+        <button class="btn-link" onclick={openTokens}>
+          Comprar más tokens
+        </button>
+      {/if}
     </div>
   {:else}
     <div class="popup-body">
@@ -97,19 +150,51 @@
   }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; }
   .title { font-weight: 600; font-size: 13px; letter-spacing: 0.2px; }
-  .popup-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .popup-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .center { align-items: center; justify-content: center; min-height: 80px; }
   .muted { font-size: 12px; color: #9ca3af; }
   .user-info { display: flex; justify-content: space-between; align-items: center; }
   .email { font-size: 12px; color: #374151; word-break: break-all; }
-  .tokens { display: flex; align-items: baseline; gap: 6px; }
-  .token-count { font-size: 28px; font-weight: 700; color: #1a56db; line-height: 1; }
+
+  .tokens { display: flex; align-items: center; gap: 10px; }
+  .token-count { font-size: 36px; font-weight: 700; line-height: 1; flex-shrink: 0; transition: color 0.3s; }
+  .token-meta { display: flex; flex-direction: column; gap: 5px; flex: 1; }
   .token-label { font-size: 12px; color: #6b7280; }
+
+  .token-bar-bg {
+    height: 5px; background: #e5e7eb; border-radius: 999px; overflow: hidden;
+  }
+  .token-bar-fill {
+    height: 100%; border-radius: 999px; transition: width 0.4s, background 0.3s;
+  }
+
+  .pack-pill {
+    display: inline-block; padding: 4px 10px;
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 999px; font-size: 11px; color: #1e40af;
+    text-align: center;
+  }
+
   .login-prompt { font-size: 12px; color: #6b7280; text-align: center; }
+
   .btn-primary {
     display: block; width: 100%; text-align: center; padding: 8px;
     background: #1a56db; color: #fff; border: none; border-radius: 6px;
     font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;
   }
   .btn-primary:hover { background: #1e40af; }
+
+  .btn-buy {
+    display: block; width: 100%; text-align: center; padding: 8px;
+    background: #f97316; color: #fff; border: none; border-radius: 6px;
+    font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-buy:hover { background: #ea6c0a; }
+
+  .btn-link {
+    display: block; width: 100%; text-align: center; padding: 4px;
+    background: none; border: none; color: #6b7280;
+    font-size: 11px; cursor: pointer; text-decoration: underline;
+  }
+  .btn-link:hover { color: #1a56db; }
 </style>

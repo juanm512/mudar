@@ -8,7 +8,6 @@ import { ORPCError } from "@orpc/server"
 import { authedProcedure } from "./middleware"
 
 const INITIAL_TOKENS = 10
-const FREE_TRANSPORTS = new Set(["walking"])
 
 // ── geo.isochrone ─────────────────────────────────────────────────────────────
 
@@ -23,21 +22,17 @@ const geoIsochrone = authedProcedure
     })
   )
   .handler(async ({ input, context }) => {
-    const isFree = FREE_TRANSPORTS.has(input.transport)
+    // Verificar saldo ANTES de llamar a TravelTime
+    const result = await db
+      .select({ total: sum(tokens.amount) })
+      .from(tokens)
+      .where(eq(tokens.userId, context.user.id))
 
-    // Verificar saldo ANTES de llamar a TravelTime (solo si no es gratis)
-    if (!isFree) {
-      const result = await db
-        .select({ total: sum(tokens.amount) })
-        .from(tokens)
-        .where(eq(tokens.userId, context.user.id))
-
-      const balance = Number(result[0]?.total ?? 0)
-      if (balance < 1) {
-        throw new ORPCError("FORBIDDEN", {
-          message: "Sin tokens suficientes",
-        })
-      }
+    const balance = Number(result[0]?.total ?? 0)
+    if (balance < 1) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Sin tokens suficientes",
+      })
     }
 
     const provider = new TravelTimeProvider()
@@ -68,14 +63,12 @@ const geoIsochrone = authedProcedure
       address: input.address,
     })
 
-    // Descontar token solo si no es transporte gratuito
-    if (!isFree) {
-      await db.insert(tokens).values({
-        userId: context.user.id,
-        amount: -1,
-        reason: "isochrone",
-      })
-    }
+    // Descontar 1 token por cálculo
+    await db.insert(tokens).values({
+      userId: context.user.id,
+      amount: -1,
+      reason: "isochrone",
+    })
 
     return geojson
   })

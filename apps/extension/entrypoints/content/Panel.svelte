@@ -23,15 +23,16 @@
     onActivateMapPick: (cb: (lat: number, lng: number, label: string) => void) => void
     onToggleMarkers: (visible: boolean) => void
     onSetOrigin: (lat: number | null, lng: number | null) => void
+    onToggleLayer: (transport: string, visible: boolean) => void
   }
-  const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onSetOrigin }: Props = $props()
+  const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onSetOrigin, onToggleLayer }: Props = $props()
 
   // ── Constantes de transporte ───────────────────────────────────────────────
   const TRANSPORT_OPTIONS = [
-    { value: "walking",          label: "🚶 Caminando",     free: true,  color: "#16a34a" },
-    { value: "cycling",          label: "🚲 Bici",           free: false, color: "#f59e0b" },
-    { value: "driving",          label: "🚗 Auto",           free: false, color: "#dc2626" },
-    { value: "public_transport", label: "🚌 Trans. público", free: false, color: "#7c3aed" },
+    { value: "walking",          label: "🚶 Caminando",     color: "#16a34a" },
+    { value: "cycling",          label: "🚲 Bici",           color: "#f59e0b" },
+    { value: "driving",          label: "🚗 Auto",           color: "#dc2626" },
+    { value: "public_transport", label: "🚌 Trans. público", color: "#7c3aed" },
   ]
   const TRANSPORT_COLORS: Record<string, string> = {
     walking: "#16a34a", cycling: "#f59e0b", driving: "#dc2626", public_transport: "#7c3aed",
@@ -48,6 +49,9 @@
   let dragOffsetX = 0
   let dragOffsetY = 0
   let activeTab = $state<"calculate" | "history">("calculate")
+  let viewMode = $state<"form" | "results">("form")
+  let resultTransports = $state<string[]>([])
+  let hiddenLayers = $state(new Set<string>())
 
   // ── Estado del formulario ─────────────────────────────────────────────────
   let address = $state("")
@@ -105,17 +109,23 @@
   )
 
   // ── Derived: costo y validación ───────────────────────────────────────────
-  const tokenCost = $derived(
-    [...selectedTransports].filter(t => t !== "walking").length
-  )
+  const tokenCost = $derived(selectedTransports.size)
   const canCalculate = $derived(
     loggedIn &&
     !isCalculating &&
     selectedLat !== null &&
     selectedLng !== null &&
     selectedTransports.size > 0 &&
-    (tokenCost === 0 || (tokens !== null && tokens >= tokenCost))
+    tokens !== null && tokens >= tokenCost
   )
+
+  // ── Estado upsell banner ──────────────────────────────────────────────────
+  let upsellDismissed = $state(false)
+  const showUpsell = $derived(
+    loggedIn && tokens !== null && tokens <= 3 && !upsellDismissed
+  )
+
+  const API_BASE = "http://localhost:3001"
 
   // Notificar cambio de origen al overlay
   $effect(() => {
@@ -200,6 +210,9 @@
       saveToCache({ lat, lng, time: timeMinutes * 60, address }, layers)
       loadHistory()
       hasResults = true
+      resultTransports = transports
+      hiddenLayers = new Set()
+      viewMode = "results"
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string }
       if (e?.message === "NO_COVERAGE") calculationError = "NO_COVERAGE"
@@ -216,7 +229,17 @@
     calculationOrigin = null
     hasResults = false
     resultCount = null
+    viewMode = "form"
+    resultTransports = []
+    hiddenLayers = new Set()
     onClear()
+  }
+
+  function toggleLayer(transport: string) {
+    if (hiddenLayers.has(transport)) hiddenLayers.delete(transport)
+    else hiddenLayers.add(transport)
+    hiddenLayers = new Set(hiddenLayers)
+    onToggleLayer(transport, !hiddenLayers.has(transport))
   }
 
   async function loadFromHistory(entry: CacheEntry) {
@@ -236,18 +259,30 @@
     calculationError = null
     isLoadingHistory = false
     activeTab = "calculate"
+    resultTransports = entry.layers.map(l => l.transport)
+    hiddenLayers = new Set()
+    viewMode = "results"
   }
 
   function extractRings(geojson: GeoJSON): number[][][] {
-    if (geojson.type === "FeatureCollection" && geojson.features.length > 0) {
-      const f = geojson.features[0]
-      if (f?.geometry.type === "Polygon") return f.geometry.coordinates
-      if (f?.geometry.type === "MultiPolygon") return f.geometry.coordinates[0] ?? []
+    const rings: number[][][] = []
+    if (geojson.type === "FeatureCollection") {
+      for (const f of geojson.features) {
+        if (f.geometry.type === "Polygon" && f.geometry.coordinates[0])
+          rings.push(f.geometry.coordinates[0])
+        else if (f.geometry.type === "MultiPolygon") {
+          for (const poly of f.geometry.coordinates)
+            if (poly[0]) rings.push(poly[0])
+        }
+      }
+      return rings
     }
     if (geojson.type === "Feature") {
-      if (geojson.geometry.type === "Polygon") return geojson.geometry.coordinates
+      if (geojson.geometry.type === "Polygon") return [geojson.geometry.coordinates[0]!]
+      if (geojson.geometry.type === "MultiPolygon")
+        return geojson.geometry.coordinates.map(p => p[0]!)
     }
-    return []
+    return rings
   }
 
   // ── Drag ──────────────────────────────────────────────────────────────────
@@ -337,6 +372,43 @@
 
       {#if activeTab === "calculate"}
 
+      {#if viewMode === "results"}
+        <!-- ── Vista de resultados ──────────────────────────────────────── -->
+        <div class="results-count">
+          <span class="results-number">{resultCount ?? "—"}</span>
+          <span class="results-sub">propiedades en zona</span>
+        </div>
+
+        <div class="layers-list">
+          {#each resultTransports as transport (transport)}
+            {@const color = TRANSPORT_COLORS[transport] ?? "#1a56db"}
+            {@const label = TRANSPORT_OPTIONS.find(o => o.value === transport)?.label ?? transport}
+            {@const hidden = hiddenLayers.has(transport)}
+            <div class="layer-row" class:layer-hidden={hidden}>
+              <span class="layer-dot" style="background:{color}"></span>
+              <span class="layer-name">{label}</span>
+              <button
+                class="btn-layer-toggle"
+                onclick={() => toggleLayer(transport)}
+                title={hidden ? "Mostrar zona" : "Ocultar zona"}
+              >
+                {hidden ? "👁" : "🙈"}
+              </button>
+            </div>
+          {/each}
+        </div>
+
+        <button class="btn-toggle-markers" onclick={toggleMarkers}>
+          {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
+        </button>
+
+        <button class="btn-new-search" onclick={handleClear}>
+          ← Nueva búsqueda
+        </button>
+
+      {:else}
+        <!-- ── Formulario de cálculo ─────────────────────────────────────── -->
+
         <!-- Dirección -->
         <div class="field">
           <div class="field-label-row">
@@ -414,38 +486,57 @@
                 onclick={() => toggleTransport(opt.value)}
               >
                 {opt.label}
-                {#if opt.free}
-                  <span class="badge-free">Gratis</span>
-                {:else}
-                  <span class="token-badge-wrap">
-                    <span class="token-badge" style={selectedTransports.has(opt.value) ? `color:${opt.color}` : ""}>−1</span>
-                    <span class="tooltip">Consume 1 token<br>por cálculo</span>
-                  </span>
-                {/if}
+                <span class="token-badge-wrap">
+                  <span class="token-badge" style={selectedTransports.has(opt.value) ? `color:${opt.color}` : ""}>−1</span>
+                  <span class="tooltip">Consume 1 token<br>por cálculo</span>
+                </span>
               </button>
             {/each}
           </div>
         </div>
 
         <!-- Tokens / sesión -->
-        <div class="tokens-row">
-          {#if loggedIn}
-            {#if $tokensQuery.isLoading}
-              <span class="tokens-label muted">Cargando tokens...</span>
-            {:else}
-              <span class="tokens-label">
-                <strong>{tokens ?? "—"}</strong> tokens disponibles
-                {#if tokenCost > 0}
-                  · este cálculo: <strong class="token-cost">−{tokenCost}</strong>
-                {/if}
-              </span>
-            {/if}
-          {:else}
-            <a href="http://localhost:3001/sign-in" target="_blank" rel="noopener" class="link">
+        {#if !loggedIn}
+          <div class="tokens-row">
+            <a href="{API_BASE}/sign-in" target="_blank" rel="noopener" class="link">
               Iniciá sesión para calcular
             </a>
-          {/if}
-        </div>
+          </div>
+        {:else if $tokensQuery.isLoading}
+          <div class="tokens-row">
+            <span class="muted">Cargando tokens...</span>
+          </div>
+        {:else if tokens === 0}
+          <div class="tokens-empty">
+            <span>Sin tokens para calcular</span>
+            <a href="{API_BASE}/dashboard/tokens" target="_blank" rel="noopener" class="btn-buy-tokens">
+              Comprar tokens →
+            </a>
+          </div>
+        {:else if tokens !== null && tokens <= 3}
+          <div class="tokens-row tokens-low">
+            <span>⚠️ <strong>{tokens}</strong> tokens — ¡casi sin saldo!</span>
+            <a href="{API_BASE}/dashboard/tokens" target="_blank" rel="noopener" class="link-buy">Comprar más →</a>
+          </div>
+        {:else}
+          <div class="tokens-row tokens-ok">
+            <span>✓ <strong>{tokens}</strong> tokens</span>
+            {#if tokenCost > 0}
+              <span class="token-cost-hint">· −{tokenCost} en este cálculo</span>
+            {/if}
+          </div>
+        {/if}
+
+        <!-- Banner upsell (colapsable, solo cuando saldo <= 3) -->
+        {#if showUpsell}
+          <div class="upsell-banner">
+            <div class="upsell-content">
+              <span class="upsell-text">🎯 10 tokens por <strong>$16.000</strong></span>
+              <a href="{API_BASE}/dashboard/tokens" target="_blank" rel="noopener" class="btn-upsell">Ver packs</a>
+            </div>
+            <button class="btn-upsell-close" onclick={() => (upsellDismissed = true)}>×</button>
+          </div>
+        {/if}
 
         <!-- Acciones -->
         <div class="actions">
@@ -454,19 +545,32 @@
             disabled={!canCalculate}
             onclick={calculate}
           >
-            {isCalculating ? "Calculando..." : "Calcular zona"}
+            {#if isCalculating}
+              Calculando...
+            {:else if tokenCost > 0}
+              Calcular zona · −{tokenCost} 🪙
+            {:else}
+              Calcular zona
+            {/if}
           </button>
           {#if hasResults}
             <button class="btn-secondary" onclick={handleClear}>Limpiar</button>
           {/if}
         </div>
 
+        <!-- Link de compra cuando no puede calcular por falta de tokens -->
+        {#if loggedIn && tokens !== null && tokens < tokenCost && !isCalculating}
+          <a href="{API_BASE}/dashboard/tokens" target="_blank" rel="noopener" class="link-insuf">
+            Comprá más tokens para calcular →
+          </a>
+        {/if}
+
         <!-- Toggle marcadores -->
         <button class="btn-toggle-markers" onclick={toggleMarkers}>
           {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
         </button>
 
-        <!-- Estado / resultado -->
+        <!-- Estado / error -->
         {#if calculationError === "NO_COVERAGE"}
           <p class="msg-error">Sin cobertura en esta zona. No se cobró token.</p>
         {:else if calculationError === "FORBIDDEN"}
@@ -476,11 +580,8 @@
         {:else if calculationError}
           <p class="msg-error">Error al calcular la isócrona.</p>
         {/if}
-        {#if hasResults}
-          <p class="msg-success">
-            {resultCount !== null ? `${resultCount} propiedades en zona` : "Zona calculada ✓"}
-          </p>
-        {/if}
+
+      {/if} <!-- /viewMode -->
 
       {:else}
 
@@ -697,7 +798,53 @@
 
   .token-cost { color: #f59e0b; }
 
-  .tokens-row { font-size: 12px; color: #6b7280; text-align: center; }
+  .tokens-row { font-size: 12px; color: #6b7280; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+  .tokens-ok { color: #16a34a; }
+  .tokens-low { color: #d97706; }
+  .token-cost-hint { color: #9ca3af; }
+
+  .tokens-empty {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+    padding: 8px 12px; font-size: 12px; color: #dc2626; font-weight: 600;
+  }
+
+  .btn-buy-tokens {
+    display: inline-block; padding: 4px 10px;
+    background: #dc2626; color: #fff; border-radius: 6px;
+    font-size: 11px; font-weight: 700; text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-buy-tokens:hover { background: #b91c1c; }
+
+  .link-buy { color: #d97706; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .link-buy:hover { text-decoration: underline; }
+
+  .upsell-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 10px;
+  }
+  .upsell-content { display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap; }
+  .upsell-text { font-size: 12px; color: #1e40af; }
+  .btn-upsell {
+    display: inline-block; padding: 3px 10px;
+    background: #1a56db; color: #fff; border-radius: 6px;
+    font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap;
+  }
+  .btn-upsell:hover { background: #1e40af; }
+  .btn-upsell-close {
+    background: none; border: none; color: #93c5fd; cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 0 2px; flex-shrink: 0;
+  }
+  .btn-upsell-close:hover { color: #1a56db; }
+
+  .link-insuf {
+    display: block; text-align: center; font-size: 12px; font-weight: 600;
+    color: #1a56db; text-decoration: none;
+  }
+  .link-insuf:hover { text-decoration: underline; }
+
   .muted { color: #9ca3af; }
 
   .link { color: #1a56db; text-decoration: none; font-size: 12px; }
@@ -723,6 +870,40 @@
 
   .msg-error { font-size: 12px; color: #dc2626; text-align: center; margin: 0; }
   .msg-success { font-size: 12px; color: #16a34a; text-align: center; margin: 0; }
+
+  /* Vista de resultados */
+  .results-count {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 0 8px; gap: 2px;
+  }
+  .results-number { font-size: 42px; font-weight: 800; color: #1a56db; line-height: 1; }
+  .results-sub { font-size: 12px; color: #6b7280; }
+
+  .layers-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .layer-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: #f9fafb; transition: opacity 0.2s;
+  }
+  .layer-row.layer-hidden { opacity: 0.45; }
+
+  .layer-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .layer-name { flex: 1; font-size: 12px; color: #374151; font-weight: 500; }
+
+  .btn-layer-toggle {
+    background: none; border: none; cursor: pointer;
+    font-size: 14px; padding: 2px 4px; line-height: 1; border-radius: 4px;
+  }
+  .btn-layer-toggle:hover { background: #e5e7eb; }
+
+  .btn-new-search {
+    width: 100%; padding: 9px; background: #f3f4f6;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: #374151;
+    cursor: pointer; font-family: inherit; text-align: center;
+  }
+  .btn-new-search:hover { background: #e5e7eb; }
 
   .btn-toggle-markers {
     width: 100%; padding: 7px; background: #f9fafb;

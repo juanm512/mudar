@@ -74,15 +74,14 @@ export default defineContentScript({
       return inside
     }
 
-    function pointInPolygon(lng: number, lat: number, rings: number[][][]) {
-      return pointInRing(lng, lat, rings[0]!)
+    function pointInPolygon(lng: number, lat: number, outerRings: number[][][]) {
+      return outerRings.some(ring => pointInRing(lng, lat, ring))
     }
 
-    function filterMarkersAll(container: HTMLElement): number {
+    function filterMarkersWithRings(container: HTMLElement, ringGroups: number[][][][]): number {
       const ref = getTileRef(container)
       if (!ref) return 0
-      const rings = [...allPolyRings.values()]
-      if (rings.length === 0) return 0
+      if (ringGroups.length === 0) return 0
       const markers = container.querySelectorAll(".leaflet-marker-icon") as NodeListOf<HTMLElement>
       let count = 0
       markers.forEach((m) => {
@@ -90,11 +89,15 @@ export default defineContentScript({
         const ax = rect.left + rect.width / 2 - ref.containerRect.left
         const ay = rect.top + rect.height - ref.containerRect.top
         const { lat, lng } = containerPxToLatLng(ax, ay, ref)
-        const inside = rings.some(r => pointInPolygon(lng, lat, r))
+        const inside = ringGroups.some(r => pointInPolygon(lng, lat, r))
         m.style.display = inside ? "" : "none"
         if (inside) count++
       })
       return count
+    }
+
+    function filterMarkersAll(container: HTMLElement): number {
+      return filterMarkersWithRings(container, [...allPolyRings.values()])
     }
 
     function waitForArgenMap(cb: (container: HTMLElement, mapPane: HTMLElement) => void | Promise<void>, retries = 40) {
@@ -124,6 +127,7 @@ export default defineContentScript({
     // Capas por transporte
     const geoLayers = new Map<string, ReturnType<typeof L.geoJSON>>()
     const allPolyRings = new Map<string, number[][][]>()
+    const hiddenLayersSet = new Set<string>()
 
     let panelInstance: { setResultCount?: (n: number) => void } | null = null
     let markersVisible = true
@@ -264,6 +268,7 @@ export default defineContentScript({
                 geoLayers.forEach(l => l.remove())
                 geoLayers.clear()
                 allPolyRings.clear()
+                hiddenLayersSet.clear()
                 if (originMarker) { originMarker.remove(); originMarker = null }
                 argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
                   .forEach((m) => (m.style.display = ""))
@@ -279,6 +284,28 @@ export default defineContentScript({
                     fillOpacity: 1,
                     interactive: false,
                   }).addTo(ourMap)
+                }
+              },
+              onToggleLayer(transport: string, visible: boolean) {
+                if (visible) {
+                  hiddenLayersSet.delete(transport)
+                  if (ourMap && geoLayers.has(transport))
+                    geoLayers.get(transport)!.addTo(ourMap)
+                } else {
+                  hiddenLayersSet.add(transport)
+                  geoLayers.get(transport)?.remove()
+                }
+                const visibleRings = [...allPolyRings.entries()]
+                  .filter(([t]) => !hiddenLayersSet.has(t))
+                  .map(([, r]) => r)
+                argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+                  .forEach(m => (m.style.display = ""))
+                if (markersVisible && visibleRings.length > 0) {
+                  const count = filterMarkersWithRings(argenContainer, visibleRings)
+                  panelInstance?.setResultCount?.(count)
+                } else if (visibleRings.length === 0) {
+                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+                    .forEach(m => (m.style.display = ""))
                 }
               },
               onToggleMarkers(visible: boolean) {
