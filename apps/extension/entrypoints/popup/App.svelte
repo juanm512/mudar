@@ -69,13 +69,13 @@
 
 <main class="popup">
   <header class="popup-header">
-    <span class="dot"></span>
-    <span class="title">Mudar</span>
+    <img src="/icon1.png" alt="Mudarg" class="header-logo" />
+    <span class="title">Mudarg</span>
   </header>
 
   {#if sessionLoading}
     <div class="popup-body center">
-      <div class="loading-logo">M</div>
+      <img src="/icon1.png" alt="Mudarg" class="loading-logo" />
     </div>
   {:else if session}
     <div class="popup-body">
@@ -148,11 +148,10 @@
     display: flex; align-items: center; gap: 6px;
     padding: 10px 14px; background: #1a56db; color: #fff;
   }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; }
+  .header-logo { width: 20px; height: 20px; object-fit: contain; }
   .title { font-weight: 600; font-size: 13px; letter-spacing: 0.2px; }
   .popup-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .center { align-items: center; justify-content: center; min-height: 80px; }
-  .muted { font-size: 12px; color: #9ca3af; }
   .user-info { display: flex; justify-content: space-between; align-items: center; }
   .email { font-size: 12px; color: #374151; word-break: break-all; }
 
@@ -200,15 +199,13 @@
 
   /* Loading Logo */
   .loading-logo {
-    font-size: 42px;
-    font-weight: 900;
-    color: #1a56db;
-    line-height: 1;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    animation: mudar-pulse 1.4s ease-in-out infinite;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    animation: mudarg-pulse 1.4s ease-in-out infinite;
   }
 
-  @keyframes mudar-pulse {
+  @keyframes mudarg-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.35; transform: scale(0.82); }
   }

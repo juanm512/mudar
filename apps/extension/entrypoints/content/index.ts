@@ -79,7 +79,7 @@ export default defineContentScript({
     async function reverseGeocode(lat: number, lng: number): Promise<string> {
       try {
         const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-        const res = await fetch(url, { headers: { "User-Agent": "Mudar-Extension/1.0" } })
+        const res = await fetch(url, { headers: { "User-Agent": "Mudarg-Extension/1.0" } })
         const data = await res.json() as { display_name?: string }
         return data.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`
       } catch {
@@ -306,7 +306,9 @@ export default defineContentScript({
                 const cachedPolyRings = polyRings.map(ring => {
                   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
                   for (let i = 0; i < ring.length; i++) {
-                    const [lng, lat] = ring[i]!;
+                    const coord = ring[i]!;
+                    const lng = coord[0] as number;
+                    const lat = coord[1] as number;
                     if (lng < minLng) minLng = lng;
                     if (lng > maxLng) maxLng = lng;
                     if (lat < minLat) minLat = lat;

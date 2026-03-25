@@ -2,7 +2,7 @@ import Link from "next/link"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Mudar — Mejorá tu búsqueda en Argenprop y ZonaProp",
+  title: "Mudarg — Mejorá tu búsqueda en Argenprop y ZonaProp",
   description: "Una extensión de navegador que suma datos útiles directamente al mapa para que encuentres tu hogar más rápido.",
   icons: {
     icon: "/favicon.ico",
@@ -24,7 +24,7 @@ export default function LandingPage() {
         </h1>
 
         <p className="mx-auto mb-10 max-w-2xl animate-fade-in-up text-lg text-gray-600 sm:text-xl md:mb-12">
-          Mudar enriquece tu búsqueda en portales inmobiliarios. Mirá datos clave de viaje y transporte directamente en el mapa sin tener que abrir decenas de pestañas.
+          Mudarg enriquece tu búsqueda en portales inmobiliarios. Mirá datos clave de viaje y transporte directamente en el mapa sin tener que abrir decenas de pestañas.
         </p>
 
         <div className="flex animate-fade-in-up flex-col items-center justify-center gap-4 sm:flex-row">
@@ -100,14 +100,14 @@ export default function LandingPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">La solución con Mudar</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">La solución con Mudarg</h3>
                     <p className="mt-1 text-gray-600">Ves el tiempo de viaje directo en el mapa de Argenprop sin salir de la página. Minimizás la fricción y comparás al instante.</p>
                   </div>
                 </div>
               </div>
             </div>
             <div className="relative aspect-square md:aspect-auto md:h-full w-full rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
-               <span className="text-gray-400 font-medium px-4 text-center">🖼️ Captura de pantalla: Una vista de propiedad limpia con métricas de Mudar</span>
+               <span className="text-gray-400 font-medium px-4 text-center">🖼️ Captura de pantalla: Una vista de propiedad limpia con métricas de Mudarg</span>
             </div>
           </div>
         </div>
@@ -171,7 +171,7 @@ export default function LandingPage() {
                 1
               </div>
               <h3 className="mb-2 text-xl font-semibold text-gray-900">Instalá la extensión</h3>
-              <p className="text-gray-600">Agregá Mudar a tu navegador en segundos, totalmente gratis.</p>
+              <p className="text-gray-600">Agregá Mudarg a tu navegador en segundos, totalmente gratis.</p>
             </div>
             <div className="relative">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold border-4 border-white shadow-lg text-white">
@@ -215,13 +215,13 @@ export default function LandingPage() {
       <footer className="w-full border-t border-gray-200 bg-white py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 md:flex-row">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-gray-900">Mudar</span>
+            <span className="text-lg font-bold text-gray-900">Mudarg</span>
             <span className="text-sm text-gray-500">© 2026</span>
           </div>
           <div className="flex gap-6 text-sm text-gray-500">
              <Link href="/terms" className="hover:text-blue-600 transition-colors">Términos</Link>
              <Link href="/privacy" className="hover:text-blue-600 transition-colors">Privacidad</Link>
-             <a href="mailto:hola@mudar.com" className="hover:text-blue-600 transition-colors">Contacto</a>
+             <a href="mailto:hola@mudarg.com" className="hover:text-blue-600 transition-colors">Contacto</a>
           </div>
         </div>
       </footer>

@@ -142,7 +142,7 @@
   async function searchAddress() {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&countrycodes=ar&limit=5`
-      const res = await fetch(url, { headers: { "User-Agent": "Mudar-Extension/1.0" } })
+      const res = await fetch(url, { headers: { "User-Agent": "Mudarg-Extension/1.0" } })
       suggestions = (await res.json()) as NominatimResult[]
       showSuggestions = suggestions.length > 0
     } catch {
@@ -359,7 +359,7 @@
       onmousedown={onHeaderMouseDown}
       style="cursor:{isDragging ? 'grabbing' : 'grab'}"
     >
-      <span class="panel-title">Mudar</span>
+      <span class="panel-title">Mudarg</span>
       <button class="btn-minimize" onclick={() => (minimized = true)} title="Minimizar">−</button>
     </div>
 
@@ -808,11 +808,7 @@
   .transport-btn:active { transform: scale(0.98); }
   .transport-btn.active { font-weight: 600; color: var(--color-foreground); }
 
-  .badge-free { font-size: 10px; color: #16a34a; font-weight: 700; }
-
   .token-badge { font-size: 10px; color: #f59e0b; font-weight: 700; }
-
-  .token-cost { color: #f59e0b; }
 
   .tokens-row { font-size: 12px; color: #6b7280; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
   .tokens-ok { color: #16a34a; }
@@ -855,12 +851,6 @@
   }
   .btn-upsell-close:hover { color: #1a56db; }
 
-  .link-insuf {
-    display: block; text-align: center; font-size: 12px; font-weight: 600;
-    color: #1a56db; text-decoration: none;
-  }
-  .link-insuf:hover { text-decoration: underline; }
-
   .muted { color: #9ca3af; }
 
   .link { color: #1a56db; text-decoration: none; font-size: 12px; }
@@ -887,7 +877,6 @@
   .btn-secondary:active { transform: translateY(0) scale(0.98); }
 
   .msg-error { font-size: 12px; color: #dc2626; text-align: center; margin: 0; }
-  .msg-success { font-size: 12px; color: #16a34a; text-align: center; margin: 0; }
 
   /* Vista de resultados */
   .results-count {
