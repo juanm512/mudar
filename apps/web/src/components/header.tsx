@@ -7,7 +7,7 @@ import { signOut, useSession } from "@/lib/auth-client"
 
 export function Header() {
   const router = useRouter()
-  const { data: session } = useSession()
+  const { data: session, isPending } = useSession()
 
   async function handleSignOut() {
     await signOut()
@@ -21,7 +21,12 @@ export function Header() {
           Mudar
         </Link>
         <nav className="flex items-center gap-4">
-          {session ? (
+          {isPending ? (
+            <div className="flex animate-pulse items-center gap-4">
+              <div className="h-4 w-20 rounded bg-gray-200"></div>
+              <div className="h-8 w-24 rounded-lg bg-gray-200"></div>
+            </div>
+          ) : session ? (
             <>
               <Link
                 href="/dashboard"

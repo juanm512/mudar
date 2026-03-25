@@ -1,9 +1,9 @@
-// Content script de Mudar — panel lateral + overlay Leaflet + filtrado de markers
 import { mount } from "svelte"
 import L from "leaflet"
 import Panel from "./Panel.svelte"
 import type { GeoJSON, TileRef } from "./overlay"
 import { getLastCache } from "./cache"
+import "../../../../tooling/tailwind/theme.css"
 
 const TRANSPORT_COLORS: Record<string, string> = {
   walking:          "#16a34a",
@@ -144,7 +144,7 @@ export default defineContentScript({
 
       let count = 0
       let i = 0
-      const CHUNK_SIZE = 10 // Podemos subirlo porque la matemática es puramente JS
+      const CHUNK_SIZE = 50 // Podemos subirlo porque la matemática es puramente JS
 
       function processChunk() {
         if (version !== filterVersion) return // Cancelado por una corrida más nueva

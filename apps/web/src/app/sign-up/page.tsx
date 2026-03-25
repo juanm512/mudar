@@ -4,12 +4,19 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
-import { signUp } from "@/lib/auth-client"
+import { signUp, useSession } from "@/lib/auth-client"
 
 export default function SignUpPage() {
   const router = useRouter()
+  const { data: session, isPending } = useSession()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  if (isPending) return null
+  if (session) {
+    router.push("/dashboard")
+    return null
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

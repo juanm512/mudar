@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./base.css",
-    "./postcss": "./postcss.config.js"
+    "./postcss": "./postcss.config.js",
+    "./theme": "./theme.css"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules"
