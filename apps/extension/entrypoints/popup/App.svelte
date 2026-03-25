@@ -35,7 +35,7 @@
   const _tokensOpts = derived(
     _sessionEnabled,
     (enabled): CreateQueryOptions<{ tokens: number }> => ({
-      ...orpc.user.tokens.queryOptions(),
+      ...orpc.tokens.balance.queryOptions(),
       enabled,
     })
   )

@@ -3,7 +3,14 @@ import { mount } from "svelte"
 import L from "leaflet"
 import Panel from "./Panel.svelte"
 import type { GeoJSON, TileRef } from "./overlay"
-import { saveToCache, getLastCache } from "./cache"
+import { getLastCache } from "./cache"
+
+const TRANSPORT_COLORS: Record<string, string> = {
+  walking:          "#16a34a",
+  cycling:          "#f59e0b",
+  driving:          "#dc2626",
+  public_transport: "#7c3aed",
+}
 
 export default defineContentScript({
   matches: [
@@ -71,9 +78,11 @@ export default defineContentScript({
       return pointInRing(lng, lat, rings[0]!)
     }
 
-    function filterMarkers(container: HTMLElement, polyRings: number[][][]): number {
+    function filterMarkersAll(container: HTMLElement): number {
       const ref = getTileRef(container)
       if (!ref) return 0
+      const rings = [...allPolyRings.values()]
+      if (rings.length === 0) return 0
       const markers = container.querySelectorAll(".leaflet-marker-icon") as NodeListOf<HTMLElement>
       let count = 0
       markers.forEach((m) => {
@@ -81,7 +90,7 @@ export default defineContentScript({
         const ax = rect.left + rect.width / 2 - ref.containerRect.left
         const ay = rect.top + rect.height - ref.containerRect.top
         const { lat, lng } = containerPxToLatLng(ax, ay, ref)
-        const inside = pointInPolygon(lng, lat, polyRings)
+        const inside = rings.some(r => pointInPolygon(lng, lat, r))
         m.style.display = inside ? "" : "none"
         if (inside) count++
       })
@@ -112,14 +121,15 @@ export default defineContentScript({
 
     // ── Estado del overlay ─────────────────────────────────────────────────
 
-    let currentGeojson: GeoJSON | null = null
-    let currentPolyRings: number[][][] = []
+    // Capas por transporte
+    const geoLayers = new Map<string, ReturnType<typeof L.geoJSON>>()
+    const allPolyRings = new Map<string, number[][][]>()
+
     let panelInstance: { setResultCount?: (n: number) => void } | null = null
     let markersVisible = true
 
     // Leaflet overlay map (nuestro propio mapa Leaflet, sincronizado con ArgenProp)
     let ourMap: ReturnType<typeof L.map> | null = null
-    let geoLayer: ReturnType<typeof L.geoJSON> | null = null
     let originMarker: ReturnType<typeof L.circleMarker> | null = null
 
     // ── Modo pick de mapa ─────────────────────────────────────────────────
@@ -160,9 +170,6 @@ export default defineContentScript({
 
     waitForArgenMap(async (argenContainer, mapPane) => {
       console.log("[Mudar] mapa detectado ✅")
-
-      // Asegurar que el container sea position:relative para el overlay
-      // argenContainer.style.position = "relative"
 
       // ── Crear overlay Leaflet ──────────────────────────────────────────
       const overlayDiv = document.createElement("div")
@@ -224,36 +231,39 @@ export default defineContentScript({
             props: {
               getMapCenter: () => getMapState(argenContainer),
               onActivateMapPick: (cb) => activateMapPick(argenContainer, cb),
-              onCalculate(geojson: GeoJSON, polyRings: number[][][], originLat: number, originLng: number) {
-                currentGeojson = geojson
-                currentPolyRings = polyRings
-                // Dibujar polígono con nuestro Leaflet
-                if (geoLayer) { geoLayer.remove(); geoLayer = null }
+              onCalculate(geojson: GeoJSON, polyRings: number[][][], _originLat: number, _originLng: number, transport: string) {
+                const color = TRANSPORT_COLORS[transport] ?? "#1a56db"
+                // Eliminar capa anterior del mismo transporte
+                if (geoLayers.has(transport)) {
+                  geoLayers.get(transport)!.remove()
+                }
                 if (ourMap) {
-                  geoLayer = L.geoJSON(geojson as Parameters<typeof L.geoJSON>[0], {
+                  const layer = L.geoJSON(geojson as Parameters<typeof L.geoJSON>[0], {
                     interactive: false,
                     style: {
-                      color: "#1a56db",
-                      fillColor: "#1a56db",
+                      color,
+                      fillColor: color,
                       fillOpacity: 0.18,
                       weight: 2.5,
                       dashArray: "8 5",
                     },
                   }).addTo(ourMap)
-                  // Traer el marcador de origen al frente del polígono
+                  geoLayers.set(transport, layer)
                   originMarker?.bringToFront()
                 }
+                allPolyRings.set(transport, polyRings)
                 if (markersVisible) {
-                  const count = filterMarkers(argenContainer, polyRings)
+                  // Mostrar todos primero para que getBoundingClientRect() funcione
+                  argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
+                    .forEach((m) => (m.style.display = ""))
+                  const count = filterMarkersAll(argenContainer)
                   panelInstance?.setResultCount?.(count)
                 }
-                const center = getMapState(argenContainer)
-                if (center) saveToCache({ lat: center.lat, lng: center.lng, time: 0, transport: "unknown" }, geojson)
               },
               onClear() {
-                currentGeojson = null
-                currentPolyRings = []
-                if (geoLayer) { geoLayer.remove(); geoLayer = null }
+                geoLayers.forEach(l => l.remove())
+                geoLayers.clear()
+                allPolyRings.clear()
                 if (originMarker) { originMarker.remove(); originMarker = null }
                 argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
                   .forEach((m) => (m.style.display = ""))
@@ -279,8 +289,8 @@ export default defineContentScript({
                 if (!visible) {
                   argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
                     .forEach((m) => (m.style.display = "none"))
-                } else if (currentPolyRings.length > 0) {
-                  const count = filterMarkers(argenContainer, currentPolyRings)
+                } else if (allPolyRings.size > 0) {
+                  const count = filterMarkersAll(argenContainer)
                   panelInstance?.setResultCount?.(count)
                 }
               },
@@ -301,12 +311,12 @@ export default defineContentScript({
         if (ourMap) {
           ourMap.setView([state.lat, state.lng], state.zoom, { animate: false, duration: 0 })
         }
-        if (currentPolyRings.length > 0) {
+        if (allPolyRings.size > 0) {
           // Mostrar todos primero para que getBoundingClientRect() sea correcto
           argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
             .forEach((m) => (m.style.display = ""))
           if (markersVisible) {
-            const count = filterMarkers(argenContainer, currentPolyRings)
+            const count = filterMarkersAll(argenContainer)
             panelInstance?.setResultCount?.(count)
           } else {
             argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
@@ -333,7 +343,7 @@ export default defineContentScript({
       window.__mudar = {
         getMapState: () => getMapState(argenContainer),
         getTileRef: () => getTileRef(argenContainer),
-        filterMarkers: (rings: number[][][]) => filterMarkers(argenContainer, rings),
+        filterMarkersAll: () => filterMarkersAll(argenContainer),
         pointInPolygon,
         ourMap: () => ourMap,
       }

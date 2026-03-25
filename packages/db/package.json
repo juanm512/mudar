@@ -12,6 +12,7 @@
     "push": "pnpm with-env drizzle-kit push",
     "studio": "pnpm with-env drizzle-kit studio",
     "generate": "pnpm --filter @mudar/auth exec better-auth generate --config src/index.ts --output ../db/src/auth-schema.ts",
+    "seed": "pnpm with-env tsx src/seed-packs.ts",
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
@@ -22,7 +23,9 @@
   },
   "devDependencies": {
     "@mudar/typescript-config": "workspace:*",
+    "dotenv-cli": "^8.0.0",
     "drizzle-kit": "^0.30.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.8.2"
   }
 }

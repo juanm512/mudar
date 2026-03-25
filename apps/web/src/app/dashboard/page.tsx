@@ -12,9 +12,52 @@ interface Calculation {
   lng: number
   timeSeconds: number
   transport: string
+  address: string | null
   createdAt: Date | string
 }
 
+const TRANSPORT_LABELS: Record<string, string> = {
+  driving: "Auto",
+  public_transport: "Transporte público",
+  walking: "Caminando",
+  cycling: "Bicicleta",
+}
+
+// ── Fila ─────────────────────────────────────────────────────────────────────
+function CalculationRow({ calc }: { calc: Calculation }) {
+  return (
+    <tr className="border-b border-gray-50">
+      <td className="py-3 text-gray-600">
+        {new Date(calc.createdAt).toLocaleDateString("es-AR", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </td>
+      <td className="py-3 text-gray-800">
+        {calc.address ? (
+          <span title={calc.address} className="line-clamp-1">
+            {calc.address}
+          </span>
+        ) : (
+          <span className="text-gray-400">
+            {calc.lat.toFixed(4)}, {calc.lng.toFixed(4)}
+          </span>
+        )}
+      </td>
+      <td className="py-3 text-gray-600">
+        {Math.round(calc.timeSeconds / 60)} min
+      </td>
+      <td className="py-3 text-gray-600">
+        {TRANSPORT_LABELS[calc.transport] ?? calc.transport.replace("_", " ")}
+      </td>
+    </tr>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter()
   const { data: session, isPending } = useSession()
@@ -30,8 +73,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!session) return
 
-    orpc.user.tokens(undefined).then(({ tokens }) => setTokens(tokens))
-    orpc.user.history(undefined).then(({ calculations }) => setCalculations(calculations as Calculation[]))
+    orpc.tokens.balance(undefined).then(({ tokens }) => setTokens(tokens))
+    orpc.user
+      .history(undefined)
+      .then(({ calculations }) =>
+        setCalculations(calculations as Calculation[])
+      )
   }, [session])
 
   if (isPending || !session) {
@@ -58,12 +105,12 @@ export default function DashboardPage() {
             </span>
             <span className="text-sm text-gray-500">cálculos restantes</span>
           </div>
-          <button
-            disabled
-            className="mt-4 rounded-lg bg-gray-100 px-6 py-2 text-sm font-medium text-gray-400 cursor-not-allowed"
+          <a
+            href="/dashboard/tokens"
+            className="mt-4 inline-block rounded-lg bg-primary px-6 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
           >
-            Comprar tokens (próximamente)
-          </button>
+            Comprar tokens →
+          </a>
         </div>
 
         {/* Historial */}
@@ -82,34 +129,23 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-gray-500">
-                  <th className="pb-3 font-medium">Fecha</th>
-                  <th className="pb-3 font-medium">Coordenadas</th>
-                  <th className="pb-3 font-medium">Tiempo</th>
-                  <th className="pb-3 font-medium">Transporte</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calculations.map((c) => (
-                  <tr key={c.id} className="border-b border-gray-50 py-2">
-                    <td className="py-3 text-gray-600">
-                      {new Date(c.createdAt).toLocaleDateString("es-AR")}
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {Math.round(c.timeSeconds / 60)} min
-                    </td>
-                    <td className="py-3 text-gray-600 capitalize">
-                      {c.transport.replace("_", " ")}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-left text-gray-500">
+                    <th className="pb-3 font-medium">Fecha</th>
+                    <th className="pb-3 font-medium">Dirección</th>
+                    <th className="pb-3 font-medium">Tiempo</th>
+                    <th className="pb-3 font-medium">Transporte</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {calculations.map((c) => (
+                    <CalculationRow key={c.id} calc={c} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

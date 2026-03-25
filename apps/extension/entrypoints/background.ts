@@ -26,8 +26,17 @@ const router = {
     ),
   },
   user: {
-    tokens: os.handler(() => server.user.tokens(undefined)),
     history: os.handler(() => server.user.history(undefined)),
+  },
+  tokens: {
+    balance: os.handler(() => server.tokens.balance(undefined)),
+    packs: os.handler(() => server.tokens.packs(undefined)),
+    purchase: os.handler(({ input }) =>
+      server.tokens.purchase(
+        input as Parameters<RouterClient<AppRouter>["tokens"]["purchase"]>[0]
+      )
+    ),
+    history: os.handler(() => server.tokens.history(undefined)),
   },
 }
 

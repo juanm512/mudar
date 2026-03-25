@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { tick } from "svelte"
   import {
     QueryClient,
     setQueryClientContext,
     createQuery,
-    createMutation,
   } from "@tanstack/svelte-query"
   import { orpc, api } from "@/api"
   import type { GeoJSON } from "./overlay"
+  import { saveToCache, getHistory, type CacheEntry, type CacheLayer } from "./cache"
 
   // ── QueryClient ───────────────────────────────────────────────────────────
   const queryClient = new QueryClient({
@@ -17,13 +18,27 @@
   // ── Props ─────────────────────────────────────────────────────────────────
   interface Props {
     getMapCenter: () => { lat: number; lng: number } | null
-    onCalculate: (geojson: GeoJSON, polyRings: number[][][], lat: number, lng: number) => void
+    onCalculate: (geojson: GeoJSON, polyRings: number[][][], lat: number, lng: number, transport: string) => void
     onClear: () => void
     onActivateMapPick: (cb: (lat: number, lng: number, label: string) => void) => void
     onToggleMarkers: (visible: boolean) => void
     onSetOrigin: (lat: number | null, lng: number | null) => void
   }
   const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onSetOrigin }: Props = $props()
+
+  // ── Constantes de transporte ───────────────────────────────────────────────
+  const TRANSPORT_OPTIONS = [
+    { value: "walking",          label: "🚶 Caminando",     free: true,  color: "#16a34a" },
+    { value: "cycling",          label: "🚲 Bici",           free: false, color: "#f59e0b" },
+    { value: "driving",          label: "🚗 Auto",           free: false, color: "#dc2626" },
+    { value: "public_transport", label: "🚌 Trans. público", free: false, color: "#7c3aed" },
+  ]
+  const TRANSPORT_COLORS: Record<string, string> = {
+    walking: "#16a34a", cycling: "#f59e0b", driving: "#dc2626", public_transport: "#7c3aed",
+  }
+  const TRANSPORT_LABELS: Record<string, string> = {
+    walking: "🚶", cycling: "🚲", driving: "🚗", public_transport: "🚌",
+  }
 
   // ── Estado UI ─────────────────────────────────────────────────────────────
   let minimized = $state(false)
@@ -32,6 +47,7 @@
   let isDragging = $state(false)
   let dragOffsetX = 0
   let dragOffsetY = 0
+  let activeTab = $state<"calculate" | "history">("calculate")
 
   // ── Estado del formulario ─────────────────────────────────────────────────
   let address = $state("")
@@ -40,10 +56,30 @@
   let selectedLat = $state<number | null>(null)
   let selectedLng = $state<number | null>(null)
   let timeMinutes = $state(30)
-  let transport = $state<"walking" | "cycling" | "driving" | "public_transport">("walking")
+  let selectedTransports = $state(new Set<string>(["walking"]))
   let resultCount = $state<number | null>(null)
   let markersVisible = $state(true)
   let calculationOrigin = $state<{ lat: number; lng: number } | null>(null)
+
+  // ── Estado de cálculo ─────────────────────────────────────────────────────
+  let isCalculating = $state(false)
+  let isLoadingHistory = $state(false)
+  let calculationError = $state<string | null>(null)
+  let hasResults = $state(false)
+
+  // ── Historial ─────────────────────────────────────────────────────────────
+  let history = $state<CacheEntry[]>([])
+  loadHistory()
+
+  function loadHistory() {
+    history = getHistory()
+  }
+
+  function formatDate(iso: string): string {
+    const d = new Date(iso)
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" }) +
+      " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+  }
 
   function toggleMarkers() {
     markersVisible = !markersVisible
@@ -60,46 +96,31 @@
   }
 
   // ── TanStack Query: tokens ────────────────────────────────────────────────
-  // El background hace el fetch con credentials → no hay CORS desde el content script
-  const tokensQuery = createQuery(orpc.user.tokens.queryOptions())
+  const tokensQuery = createQuery(orpc.tokens.balance.queryOptions())
 
   const tokens = $derived(($tokensQuery.data as { tokens: number } | undefined)?.tokens ?? null)
-  // Logueado si tokens cargaron sin error de autenticación
   const loggedIn = $derived(
     $tokensQuery.data !== undefined ||
     ($tokensQuery.isError && ($tokensQuery.error as { code?: string })?.code !== "UNAUTHORIZED")
   )
 
-  // ── TanStack Query: isócrona mutation ────────────────────────────────────
-  const isochrone = createMutation({
-    mutationFn: (params: Parameters<typeof api.geo.isochrone>[0]) =>
-      api.geo.isochrone(params),
-  })
+  // ── Derived: costo y validación ───────────────────────────────────────────
+  const tokenCost = $derived(
+    [...selectedTransports].filter(t => t !== "walking").length
+  )
+  const canCalculate = $derived(
+    loggedIn &&
+    !isCalculating &&
+    selectedLat !== null &&
+    selectedLng !== null &&
+    selectedTransports.size > 0 &&
+    (tokenCost === 0 || (tokens !== null && tokens >= tokenCost))
+  )
 
   // Notificar cambio de origen al overlay
   $effect(() => {
     onSetOrigin(selectedLat, selectedLng)
   })
-
-  // Cuando hay resultado de isócrona, disparar el dibujo del overlay
-  $effect(() => {
-    if ($isochrone.data && calculationOrigin) {
-      const geojson = $isochrone.data as GeoJSON
-      const rings = extractRings(geojson)
-      onCalculate(geojson, rings, calculationOrigin.lat, calculationOrigin.lng)
-    }
-  })
-
-  const isFree = $derived(transport === "walking")
-  const canCalculate = $derived(
-    loggedIn &&
-    !$isochrone.isPending &&
-    selectedLat !== null &&
-    selectedLng !== null &&
-    (isFree || (tokens !== null && tokens > 0))
-  )
-  // silence unused import warning
-  void api
 
   // ── Geocoding Nominatim ───────────────────────────────────────────────────
   function onAddressInput() {
@@ -135,30 +156,82 @@
     })
   }
 
+  // ── Toggle transporte ─────────────────────────────────────────────────────
+  function toggleTransport(value: string) {
+    if (selectedTransports.has(value)) {
+      selectedTransports.delete(value)
+    } else {
+      selectedTransports.add(value)
+    }
+    selectedTransports = new Set(selectedTransports)
+  }
+
   // ── Calcular ──────────────────────────────────────────────────────────────
-  function calculate() {
+  async function calculate() {
     const lat = selectedLat
     const lng = selectedLng
-    if (lat === null || lng === null) return
+    if (lat === null || lng === null || selectedTransports.size === 0) return
 
     calculationOrigin = { lat, lng }
-    $isochrone.mutate(
-      { lat, lng, time: timeMinutes * 60, transport },
-      {
-        onSuccess: () => {
-          if (!isFree) {
-            void queryClient.invalidateQueries({ queryKey: orpc.user.tokens.queryOptions().queryKey })
-          }
-        },
+    isCalculating = true
+    calculationError = null
+    hasResults = false
+    resultCount = null
+
+    const transports = [...selectedTransports]
+    try {
+      const results = await Promise.all(
+        transports.map(t =>
+          api.geo.isochrone({ lat, lng, time: timeMinutes * 60, transport: t as "walking" | "cycling" | "driving" | "public_transport" })
+        )
+      )
+      const layers: CacheLayer[] = []
+      for (let i = 0; i < transports.length; i++) {
+        const geojson = results[i] as GeoJSON
+        const rings = extractRings(geojson)
+        onCalculate(geojson, rings, lat, lng, transports[i]!)
+        layers.push({ transport: transports[i]!, geojson })
       }
-    )
+      void queryClient.invalidateQueries({ queryKey: orpc.tokens.balance.queryOptions().queryKey })
+      saveToCache({ lat, lng, time: timeMinutes * 60, address }, layers)
+      loadHistory()
+      hasResults = true
+    } catch (err: unknown) {
+      const e = err as { message?: string; code?: string }
+      if (e?.message === "NO_COVERAGE") calculationError = "NO_COVERAGE"
+      else if (e?.code === "FORBIDDEN") calculationError = "FORBIDDEN"
+      else if (e?.code === "UNAUTHORIZED") calculationError = "UNAUTHORIZED"
+      else calculationError = "UNKNOWN"
+    } finally {
+      isCalculating = false
+    }
   }
 
   function handleClear() {
-    $isochrone.reset()
-    resultCount = null
+    calculationError = null
     calculationOrigin = null
+    hasResults = false
+    resultCount = null
     onClear()
+  }
+
+  async function loadFromHistory(entry: CacheEntry) {
+    isLoadingHistory = true
+    await tick()
+    selectedLat = entry.params.lat
+    selectedLng = entry.params.lng
+    if (entry.params.address) address = entry.params.address
+    timeMinutes = Math.round(entry.params.time / 60)
+    selectedTransports = new Set(entry.layers.map(l => l.transport))
+    calculationOrigin = { lat: entry.params.lat, lng: entry.params.lng }
+    for (const layer of entry.layers) {
+      const rings = extractRings(layer.geojson)
+      onCalculate(layer.geojson, rings, entry.params.lat, entry.params.lng, layer.transport)
+    }
+    hasResults = true
+    calculationError = null
+    isLoadingHistory = false
+    activeTab = "calculate"
   }
 
   function extractRings(geojson: GeoJSON): number[][][] {
@@ -205,6 +278,8 @@
 
   // ── Expuesto para index.ts ────────────────────────────────────────────────
   export function setResultCount(n: number) { resultCount = n }
+
+
 </script>
 
 {#if !minimized}
@@ -214,6 +289,13 @@
       ? `left:${panelX}px;top:${panelY}px;right:auto`
       : `top:${panelY}px;right:12px`}
   >
+    <!-- Loading overlay -->
+    {#if isCalculating || isLoadingHistory}
+      <div class="loading-overlay">
+        <div class="loading-logo">M</div>
+      </div>
+    {/if}
+
     <!-- Header arrastrable -->
     <div
       class="panel-header"
@@ -226,153 +308,203 @@
       <button class="btn-minimize" onclick={() => (minimized = true)} title="Minimizar">−</button>
     </div>
 
+    <!-- Tabs -->
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        class:tab-active={activeTab === "calculate"}
+        onclick={() => (activeTab = "calculate")}
+      >Calcular</button>
+      <button
+        class="tab-btn"
+        class:tab-active={activeTab === "history"}
+        onclick={() => { activeTab = "history"; loadHistory() }}
+      >Historial</button>
+    </div>
+
     <div class="panel-body">
 
-      <!-- Dirección -->
-      <div class="field">
-        <div class="field-label-row">
-          <label class="field-label" for="mudar-address">Dirección</label>
-          <span class="info-icon" aria-label="Información">
-            ⓘ
-            <span class="tooltip">Punto de origen del cálculo.<br>Por ejemplo: tu trabajo o un lugar de interés.</span>
-          </span>
-        </div>
-        <div class="autocomplete">
-          <input
-            id="mudar-address"
-            class="input"
-            type="text"
-            placeholder="Buscar dirección..."
-            bind:value={address}
-            oninput={onAddressInput}
-            onblur={() => setTimeout(() => (showSuggestions = false), 150)}
-          />
-          {#if showSuggestions}
-            <ul class="suggestions">
-              {#each suggestions as s (s.place_id)}
-                <li>
-                  <button class="suggestion-item" onmousedown={() => selectSuggestion(s)}>
-                    {s.display_name}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </div>
-        <button class="btn-map-pick" onclick={activateMapPick}>
-          📍 Marcar en mapa
-        </button>
-      </div>
+      {#if activeTab === "calculate"}
 
-      <!-- Tiempo -->
-      <div class="field">
-        <label class="field-label" for="mudar-time">Tiempo: {timeMinutes} min</label>
-        <div class="time-controls">
-          <input
-            id="mudar-time"
-            class="slider"
-            type="range"
-            min="5"
-            max="180"
-            step="5"
-            bind:value={timeMinutes}
-          />
-          <input
-            class="input input-number"
-            type="number"
-            min="5"
-            max="180"
-            value={timeMinutes}
-            oninput={onTimeInput}
-          />
-        </div>
-        <div class="slider-ticks">
-          <span>30</span><span>60</span><span>90</span><span>120</span><span>180</span>
-        </div>
-      </div>
-
-      <!-- Transporte -->
-      <div class="field">
-        <span class="field-label">Transporte</span>
-        <div class="transport-grid">
-          {#each [
-            { value: "walking", label: "🚶 Caminando", free: true },
-            { value: "cycling", label: "🚲 Bici", free: false },
-            { value: "driving", label: "🚗 Auto", free: false },
-            { value: "public_transport", label: "🚌 Bus", free: false },
-          ] as opt (opt.value)}
-            <button
-              class="transport-btn"
-              class:active={transport === opt.value}
-              onclick={() => (transport = opt.value as typeof transport)}
-            >
-              {opt.label}
-              {#if opt.free}
-                <span class="badge-free">Gratis</span>
-              {:else}
-                <span class="token-badge-wrap">
-                  <span class="token-badge">−1</span>
-                  <span class="tooltip">Consume 1 token<br>por cálculo</span>
-                </span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <!-- Tokens / sesión -->
-      <div class="tokens-row">
-        {#if loggedIn}
-          {#if $tokensQuery.isLoading}
-            <span class="tokens-label muted">Cargando tokens...</span>
-          {:else}
-            <span class="tokens-label">
-              <strong>{tokens ?? "—"}</strong> tokens disponibles
+        <!-- Dirección -->
+        <div class="field">
+          <div class="field-label-row">
+            <label class="field-label" for="mudar-address">Dirección</label>
+            <span class="info-icon" aria-label="Información">
+              ⓘ
+              <span class="tooltip">Punto de origen del cálculo.<br>Por ejemplo: tu trabajo o un lugar de interés.</span>
             </span>
+          </div>
+          <div class="autocomplete">
+            <input
+              id="mudar-address"
+              class="input"
+              type="text"
+              placeholder="Buscar dirección..."
+              bind:value={address}
+              oninput={onAddressInput}
+              onblur={() => setTimeout(() => (showSuggestions = false), 150)}
+            />
+            {#if showSuggestions}
+              <ul class="suggestions">
+                {#each suggestions as s (s.place_id)}
+                  <li>
+                    <button class="suggestion-item" onmousedown={() => selectSuggestion(s)}>
+                      {s.display_name}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+          <button class="btn-map-pick" onclick={activateMapPick}>
+            📍 Marcar en mapa
+          </button>
+        </div>
+
+        <!-- Tiempo -->
+        <div class="field">
+          <label class="field-label" for="mudar-time">Tiempo: {timeMinutes} min</label>
+          <div class="time-controls">
+            <input
+              id="mudar-time"
+              class="slider"
+              type="range"
+              min="5"
+              max="180"
+              step="5"
+              bind:value={timeMinutes}
+            />
+            <input
+              class="input input-number"
+              type="number"
+              min="5"
+              max="180"
+              value={timeMinutes}
+              oninput={onTimeInput}
+            />
+          </div>
+          <div class="slider-ticks">
+            <span>30</span><span>60</span><span>90</span><span>120</span><span>180</span>
+          </div>
+        </div>
+
+        <!-- Transporte -->
+        <div class="field">
+          <span class="field-label">Transporte</span>
+          <div class="transport-grid">
+            {#each TRANSPORT_OPTIONS as opt (opt.value)}
+              <button
+                class="transport-btn"
+                class:active={selectedTransports.has(opt.value)}
+                style={selectedTransports.has(opt.value)
+                  ? `border-color:${opt.color};background:${opt.color}18;color:${opt.color}`
+                  : ""}
+                onclick={() => toggleTransport(opt.value)}
+              >
+                {opt.label}
+                {#if opt.free}
+                  <span class="badge-free">Gratis</span>
+                {:else}
+                  <span class="token-badge-wrap">
+                    <span class="token-badge" style={selectedTransports.has(opt.value) ? `color:${opt.color}` : ""}>−1</span>
+                    <span class="tooltip">Consume 1 token<br>por cálculo</span>
+                  </span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Tokens / sesión -->
+        <div class="tokens-row">
+          {#if loggedIn}
+            {#if $tokensQuery.isLoading}
+              <span class="tokens-label muted">Cargando tokens...</span>
+            {:else}
+              <span class="tokens-label">
+                <strong>{tokens ?? "—"}</strong> tokens disponibles
+                {#if tokenCost > 0}
+                  · este cálculo: <strong class="token-cost">−{tokenCost}</strong>
+                {/if}
+              </span>
+            {/if}
+          {:else}
+            <a href="http://localhost:3001/sign-in" target="_blank" rel="noopener" class="link">
+              Iniciá sesión para calcular
+            </a>
           {/if}
-        {:else}
-          <a href="http://localhost:3001/sign-in" target="_blank" rel="noopener" class="link">
-            Iniciá sesión para calcular
-          </a>
-        {/if}
-      </div>
+        </div>
 
-      <!-- Acciones -->
-      <div class="actions">
-        <button
-          class="btn-primary"
-          disabled={!canCalculate}
-          onclick={calculate}
-        >
-          {$isochrone.isPending ? "Calculando..." : "Calcular zona"}
+        <!-- Acciones -->
+        <div class="actions">
+          <button
+            class="btn-primary"
+            disabled={!canCalculate}
+            onclick={calculate}
+          >
+            {isCalculating ? "Calculando..." : "Calcular zona"}
+          </button>
+          {#if hasResults}
+            <button class="btn-secondary" onclick={handleClear}>Limpiar</button>
+          {/if}
+        </div>
+
+        <!-- Toggle marcadores -->
+        <button class="btn-toggle-markers" onclick={toggleMarkers}>
+          {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
         </button>
-        {#if $isochrone.isSuccess}
-          <button class="btn-secondary" onclick={handleClear}>Limpiar</button>
-        {/if}
-      </div>
 
-      <!-- Toggle marcadores -->
-      <button class="btn-toggle-markers" onclick={toggleMarkers}>
-        {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
-      </button>
-
-      <!-- Estado / resultado -->
-      {#if $isochrone.isError}
-        {#if ($isochrone.error as Error)?.message === "NO_COVERAGE"}
+        <!-- Estado / resultado -->
+        {#if calculationError === "NO_COVERAGE"}
           <p class="msg-error">Sin cobertura en esta zona. No se cobró token.</p>
-        {:else if ($isochrone.error as { code?: string })?.code === "FORBIDDEN"}
+        {:else if calculationError === "FORBIDDEN"}
           <p class="msg-error">Sin tokens suficientes.</p>
-        {:else if ($isochrone.error as { code?: string })?.code === "UNAUTHORIZED"}
+        {:else if calculationError === "UNAUTHORIZED"}
           <p class="msg-error">Iniciá sesión para calcular.</p>
-        {:else}
+        {:else if calculationError}
           <p class="msg-error">Error al calcular la isócrona.</p>
         {/if}
+        {#if hasResults}
+          <p class="msg-success">
+            {resultCount !== null ? `${resultCount} propiedades en zona` : "Zona calculada ✓"}
+          </p>
+        {/if}
+
+      {:else}
+
+        <!-- ── Tab Historial ──────────────────────────────────────────────── -->
+        <div class="history-list">
+          {#if history.length === 0}
+            <p class="muted" style="text-align:center;font-size:12px;margin:8px 0">Sin historial</p>
+          {:else}
+            {#each [...history].reverse() as entry, i (i)}
+              <div class="history-entry">
+                <div class="history-meta">
+                  <span class="history-date">{formatDate(entry.timestamp)}</span>
+                  <span class="history-mins">{Math.round(entry.params.time / 60)} min</span>
+                </div>
+                <div class="history-chips">
+                  {#each entry.layers as layer}
+                    <span
+                      class="transport-chip"
+                      style="background:{TRANSPORT_COLORS[layer.transport] ?? '#1a56db'}22;color:{TRANSPORT_COLORS[layer.transport] ?? '#1a56db'}"
+                    >
+                      {TRANSPORT_LABELS[layer.transport] ?? layer.transport}
+                    </span>
+                  {/each}
+                </div>
+                {#if entry.params.address}
+                  <p class="history-address">{entry.params.address.length > 55 ? entry.params.address.slice(0, 55) + "…" : entry.params.address}</p>
+                {/if}
+                <button class="btn-load-history" onclick={() => loadFromHistory(entry)}>Cargar</button>
+              </div>
+            {/each}
+          {/if}
+        </div>
+
       {/if}
-      {#if $isochrone.isSuccess}
-        <p class="msg-success">
-          {resultCount !== null ? `${resultCount} propiedades en zona` : "Zona calculada ✓"}
-        </p>
-      {/if}
+
     </div>
   </div>
 {:else}
@@ -420,6 +552,23 @@
     font-size: 18px; line-height: 1; padding: 0 2px; opacity: 0.8;
   }
   .btn-minimize:hover { opacity: 1; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .tab-btn {
+    flex: 1; padding: 8px; background: none; border: none; cursor: pointer;
+    font-size: 12px; color: #6b7280;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+    transition: color 0.1s;
+  }
+  .tab-btn.tab-active {
+    color: #1a56db; border-bottom-color: #1a56db; font-weight: 600;
+  }
+  .tab-btn:hover:not(.tab-active) { color: #374151; }
 
   .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 
@@ -507,16 +656,16 @@
     padding: 7px 6px; border: 1px solid #e5e7eb; border-radius: 7px;
     background: #f9fafb; cursor: pointer; font-size: 12px; color: #374151;
     display: flex; align-items: center; justify-content: center;
-    gap: 4px; transition: all 0.1s; position: relative;
+    gap: 4px; transition: all 0.15s; position: relative;
+    font-family: inherit;
   }
-  .transport-btn.active {
-    border-color: #1a56db; background: #eff6ff;
-    color: #1a56db; font-weight: 600;
-  }
+  .transport-btn.active { font-weight: 600; }
 
   .badge-free { font-size: 10px; color: #16a34a; font-weight: 700; }
 
   .token-badge { font-size: 10px; color: #f59e0b; font-weight: 700; }
+
+  .token-cost { color: #f59e0b; }
 
   .tokens-row { font-size: 12px; color: #6b7280; text-align: center; }
   .muted { color: #9ca3af; }
@@ -530,6 +679,7 @@
     flex: 1; padding: 9px; background: #1a56db; color: #fff;
     border: none; border-radius: 8px; font-size: 13px;
     font-weight: 600; cursor: pointer; transition: background 0.15s;
+    font-family: inherit;
   }
   .btn-primary:hover:not(:disabled) { background: #1e40af; }
   .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
@@ -537,7 +687,7 @@
   .btn-secondary {
     padding: 9px 14px; background: #f3f4f6; color: #374151;
     border: 1px solid #e5e7eb; border-radius: 8px;
-    font-size: 13px; cursor: pointer;
+    font-size: 13px; cursor: pointer; font-family: inherit;
   }
   .btn-secondary:hover { background: #e5e7eb; }
 
@@ -548,8 +698,37 @@
     width: 100%; padding: 7px; background: #f9fafb;
     border: 1px solid #e5e7eb; border-radius: 7px;
     font-size: 12px; color: #374151; cursor: pointer; text-align: center;
+    font-family: inherit;
   }
   .btn-toggle-markers:hover { background: #f3f4f6; }
+
+  /* Historial */
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .history-entry {
+    border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+
+  .history-meta {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: #9ca3af;
+  }
+
+  .history-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .transport-chip {
+    font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600;
+  }
+
+  .history-address { font-size: 11px; color: #6b7280; margin: 0; }
+
+  .btn-load-history {
+    align-self: flex-end; padding: 4px 10px; font-size: 11px;
+    background: #eff6ff; border: 1px solid #bfdbfe; color: #1a56db;
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .btn-load-history:hover { background: #dbeafe; }
 
   .btn-expand {
     position: fixed; padding: 6px 12px; background: #1a56db;
@@ -557,5 +736,32 @@
     font-size: 12px; font-weight: 600; cursor: pointer; z-index: 9999;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     pointer-events: auto;
+  }
+
+  /* Loading overlay */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10002;
+    border-radius: 12px;
+    backdrop-filter: blur(2px);
+  }
+
+  .loading-logo {
+    font-size: 52px;
+    font-weight: 900;
+    color: #1a56db;
+    line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    animation: mudar-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes mudar-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.82); }
   }
 </style>
