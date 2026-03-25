@@ -9,5 +9,6 @@ export default defineConfig({
     description:
       "Filtrá propiedades por tiempo de viaje en ArgenProp y ZonaProp",
     permissions: ["activeTab", "storage", "tabs"],
+    host_permissions: ["http://localhost:3001/*"],
   },
 })
