@@ -63,15 +63,34 @@ export default defineContentScript({
       return { lat: center.lat, lng: center.lng, zoom: ref.z }
     }
 
-    function pointInRing(lng: number, lat: number, ring: number[][]) {
+    // Float64Array: [lng0, lat0, lng1, lat1, ...] — sin pointer chasing, cache-friendly
+    function pointInRing(lng: number, lat: number, ring: Float64Array) {
       let inside = false
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i]!
-        const [xj, yj] = ring[j]!
-        if (yi! > lat !== yj! > lat && lng < ((xj! - xi!) * (lat - yi!)) / (yj! - yi!) + xi!)
+      const n = ring.length >> 1 // cantidad de puntos
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const xi = ring[i * 2]!, yi = ring[i * 2 + 1]!
+        const xj = ring[j * 2]!, yj = ring[j * 2 + 1]!
+        if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
           inside = !inside
       }
       return inside
+    }
+
+    // Simplificación Radial Distance + conversión a Float64Array.
+    // Tolerancia 0.002° ≈ 220m — preciso para filtrar marcadores a escala ciudad.
+    function simplifyRing(ring: number[][], tolerance = 0.002): Float64Array {
+      const t2 = tolerance * tolerance
+      const pts: number[] = [ring[0]![0]!, ring[0]![1]!]
+      let lx = ring[0]![0]!, ly = ring[0]![1]!
+      for (let i = 1; i < ring.length - 1; i++) {
+        const dx = ring[i]![0]! - lx, dy = ring[i]![1]! - ly
+        if (dx * dx + dy * dy > t2) {
+          pts.push(ring[i]![0]!, ring[i]![1]!)
+          lx = ring[i]![0]!; ly = ring[i]![1]!
+        }
+      }
+      pts.push(ring[ring.length - 1]![0]!, ring[ring.length - 1]![1]!)
+      return new Float64Array(pts)
     }
 
     // ── Reverse geocoding ─────────────────────────────────────────────────
@@ -100,88 +119,122 @@ export default defineContentScript({
 
     // Capas por transporte
     const geoLayers = new Map<string, ReturnType<typeof L.geoJSON>>()
-    const allPolyRings = new Map<string, { ring: number[][], minLng: number, maxLng: number, minLat: number, maxLat: number }[]>()
+    const allPolyRings = new Map<string, { ring: Float64Array, minLng: number, maxLng: number, minLat: number, maxLat: number }[]>()
     const hiddenLayersSet = new Set<string>()
 
     let panelInstance: { setResultCount?: (n: number) => void } | null = null
     let markersVisible = true
+    let showOutsideMarkers = false
 
     // Leaflet overlay map (nuestro propio mapa Leaflet, sincronizado con ArgenProp)
     let ourMap: ReturnType<typeof L.map> | null = null
     let originMarker: ReturnType<typeof L.circleMarker> | null = null
 
-    // ── Filtrado Asíncrono por Chunks ──────────────────────────────────────
+    // ── Filtrado via stylesheet (cero mutaciones sobre marcadores) ────────────
+    // Argenprop recrea todos los marcadores en cada pan/zoom.
+    // Mutar atributos de cada marcador dispara sus propios observers (~5ms/marker).
+    // Solución: calcular posiciones, construir reglas :nth-child, actualizar UN <style> tag.
+    // El browser aplica el CSS sin disparar observers de Argenprop.
     let filterVersion = 0
+    let filterStyleEl: HTMLStyleElement | null = null
+
+    function getOrCreateFilterStyle(): HTMLStyleElement {
+      if (!filterStyleEl) {
+        filterStyleEl = document.createElement("style")
+        filterStyleEl.id = "mudar-filter-style"
+        document.head.appendChild(filterStyleEl)
+      }
+      return filterStyleEl
+    }
+
     function startAsyncFilter(container: HTMLElement) {
       const version = ++filterVersion
-      const visibleRings = [...allPolyRings.entries()]
-        .filter(([t]) => !hiddenLayersSet.has(t))
-        .map(([, r]) => r)
-      
-      const markers = Array.from(container.querySelectorAll(".leaflet-marker-icon") as NodeListOf<HTMLElement>)
-      
+      const style = getOrCreateFilterStyle()
+
       if (!markersVisible) {
-        markers.forEach(m => { m.style.visibility = "hidden"; m.style.pointerEvents = "none"; m.style.opacity = "0" })
+        style.textContent = ".leaflet-marker-pane .leaflet-marker-icon{visibility:hidden!important;pointer-events:none!important}"
         return
       }
 
+      const visibleRings = [...allPolyRings.entries()]
+        .filter(([t]) => !hiddenLayersSet.has(t))
+        .map(([, r]) => r)
+
       if (visibleRings.length === 0) {
-        markers.forEach(m => { m.style.visibility = ""; m.style.pointerEvents = ""; m.style.opacity = "1" })
+        style.textContent = ""
         return
       }
 
       const ref = getTileRef(container)
       if (!ref) return
-      
-      // Batch READ Síncrono: leemos todas las posiciones de un tirón (0 reflows)
-      const markersData = markers.map(m => {
-        const rect = m.getBoundingClientRect()
+
+      const markerPane = container.querySelector(".leaflet-marker-pane")
+      if (!markerPane) return
+
+      // Obtener solo los iconos (no sombras) con su índice nth-child dentro del pane
+      const tStart = performance.now()
+      const children = Array.from(markerPane.children) as HTMLElement[]
+      const icons = children
+        .map((el, i) => ({ el, nthChild: i + 1 }))
+        .filter(({ el }) => el.classList.contains("leaflet-marker-icon"))
+
+      // Batch READ: forzamos layout una sola vez
+      const tRead = performance.now()
+      const markersData = icons.map(({ el, nthChild }) => {
+        const rect = el.getBoundingClientRect()
         const ax = rect.left + rect.width / 2 - ref.containerRect.left
         const ay = rect.top + rect.height - ref.containerRect.top
         const { lat, lng } = containerPxToLatLng(ax, ay, ref)
-        return { m, lat, lng }
+        return { nthChild, lat, lng }
       })
+      const readMs = performance.now() - tRead
 
+      // Math puro: clasificar sin tocar el DOM
+      const tMath = performance.now()
       let count = 0
-      let i = 0
-      const CHUNK_SIZE = 50 // Podemos subirlo porque la matemática es puramente JS
-
-      function processChunk() {
-        if (version !== filterVersion) return // Cancelado por una corrida más nueva
-        const end = Math.min(i + CHUNK_SIZE, markersData.length)
-
-        for (let j = i; j < end; j++) {
-          const { m, lat, lng } = markersData[j]!
-          let inside = false
-          
-          for (const polyGroup of visibleRings) {
-            for (const { ring, minLng, maxLng, minLat, maxLat } of polyGroup) {
-              // BBox Fast check O(1)
-              if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
-                if (pointInRing(lng, lat, ring)) {
-                  inside = true
-                  break
-                }
-              }
+      const hiddenNth: number[] = []
+      for (const { nthChild, lat, lng } of markersData) {
+        let inside = false
+        for (const polyGroup of visibleRings) {
+          for (const { ring, minLng, maxLng, minLat, maxLat } of polyGroup) {
+            if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
+              if (pointInRing(lng, lat, ring)) { inside = true; break }
             }
-            if (inside) break
           }
-
-          // Batch WRITE: Aplicamos al DOM en el mismo frame
-          m.style.visibility = inside ? "" : "hidden"
-          m.style.pointerEvents = inside ? "" : "none"
-          m.style.opacity = inside ? "1" : "0" // transición suave
-          if (inside) count++
+          if (inside) break
         }
+        if (inside) count++
+        else hiddenNth.push(nthChild)
+      }
+      const mathMs = performance.now() - tMath
 
-        i = end
-        if (i < markersData.length) {
-          setTimeout(processChunk, 2) // Yield al event loop
+      // Cancelar si llegó una versión más nueva mientras calculábamos
+      if (version !== filterVersion) {
+        console.debug(`[Mudar:filter v${version}] cancelado`)
+        return
+      }
+
+      // Una sola escritura: actualizar stylesheet con :nth-child selectores
+      const tWrite = performance.now()
+      if (hiddenNth.length === 0) {
+        style.textContent = ""
+      } else {
+        const sel = hiddenNth.map(n => `.leaflet-marker-pane > :nth-child(${n})`).join(",")
+        if (showOutsideMarkers) {
+          // Visible pero atenuado — el usuario puede verlos pero están fuera de la zona
+          style.textContent = `${sel}{opacity:0.25!important}`
         } else {
-          panelInstance?.setResultCount?.(count)
+          style.textContent = `${sel}{opacity:0!important;pointer-events:none!important}`
         }
       }
-      processChunk()
+      const writeMs = performance.now() - tWrite
+
+      const totalMs = performance.now() - tStart
+      console.debug(
+        `[Mudar:filter v${version}] ✅ | ${icons.length} markers | dentro: ${count}/${icons.length} | ` +
+        `read: ${readMs.toFixed(1)}ms | math: ${mathMs.toFixed(1)}ms | write: ${writeMs.toFixed(1)}ms | total: ${totalMs.toFixed(1)}ms`
+      )
+      panelInstance?.setResultCount?.(count)
     }
 
     // ── Modo pick de mapa ─────────────────────────────────────────────────
@@ -216,6 +269,7 @@ export default defineContentScript({
         #mudar-overlay .leaflet-zoom-anim .leaflet-zoom-animated { -webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1); -moz-transition: -moz-transform 0.25s cubic-bezier(0,0,0.25,1); transition: transform 0.25s cubic-bezier(0,0,0.25,1); }
         #mudar-overlay path.leaflet-interactive { cursor: pointer; }
         #mudar-overlay .leaflet-container { background: transparent; }
+        .leaflet-marker-pane .leaflet-marker-icon { transition: opacity 0.35s ease !important; }
       `
       document.head.appendChild(style)
     }
@@ -303,17 +357,18 @@ export default defineContentScript({
                   geoLayers.set(transport, layer)
                   originMarker?.bringToFront()
                 }
-                const cachedPolyRings = polyRings.map(ring => {
-                  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-                  for (let i = 0; i < ring.length; i++) {
-                    const coord = ring[i]!;
-                    const lng = coord[0] as number;
-                    const lat = coord[1] as number;
-                    if (lng < minLng) minLng = lng;
-                    if (lng > maxLng) maxLng = lng;
-                    if (lat < minLat) minLat = lat;
-                    if (lat > maxLat) maxLat = lat;
+                const cachedPolyRings = polyRings.map(rawRing => {
+                  const ring = simplifyRing(rawRing) // Float64Array [lng,lat,lng,lat,...]
+                  const n = ring.length >> 1
+                  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+                  for (let i = 0; i < n; i++) {
+                    const lng = ring[i * 2]!, lat = ring[i * 2 + 1]!
+                    if (lng < minLng) minLng = lng
+                    if (lng > maxLng) maxLng = lng
+                    if (lat < minLat) minLat = lat
+                    if (lat > maxLat) maxLat = lat
                   }
+                  console.debug(`[Mudar] ring: ${rawRing.length} → ${n} vértices (simplificado)`)
                   return { ring, minLng, minLat, maxLng, maxLat }
                 })
                 allPolyRings.set(transport, cachedPolyRings)
@@ -327,13 +382,7 @@ export default defineContentScript({
                 allPolyRings.clear()
                 hiddenLayersSet.clear()
                 if (originMarker) { originMarker.remove(); originMarker = null }
-                argenContainer.querySelectorAll<HTMLElement>(".leaflet-marker-icon")
-                  .forEach((m) => {
-                    m.style.display = ""
-                    m.style.visibility = ""
-                    m.style.pointerEvents = ""
-                    m.style.opacity = "1"
-                  })
+                if (filterStyleEl) filterStyleEl.textContent = ""
               },
               onSetOrigin(lat: number | null, lng: number | null) {
                 if (originMarker) { originMarker.remove(); originMarker = null }
@@ -361,6 +410,10 @@ export default defineContentScript({
               },
               onToggleMarkers(visible: boolean) {
                 markersVisible = visible
+                startAsyncFilter(argenContainer)
+              },
+              onToggleOutside(show: boolean) {
+                showOutsideMarkers = show
                 startAsyncFilter(argenContainer)
               },
             },

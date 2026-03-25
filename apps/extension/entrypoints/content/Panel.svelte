@@ -22,10 +22,11 @@
     onClear: () => void
     onActivateMapPick: (cb: (lat: number, lng: number, label: string) => void) => void
     onToggleMarkers: (visible: boolean) => void
+    onToggleOutside: (show: boolean) => void
     onSetOrigin: (lat: number | null, lng: number | null) => void
     onToggleLayer: (transport: string, visible: boolean) => void
   }
-  const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onSetOrigin, onToggleLayer }: Props = $props()
+  const { getMapCenter, onCalculate, onClear, onActivateMapPick, onToggleMarkers, onToggleOutside, onSetOrigin, onToggleLayer }: Props = $props()
 
   // ── Constantes de transporte ───────────────────────────────────────────────
   const TRANSPORT_OPTIONS = [
@@ -63,6 +64,7 @@
   let selectedTransports = $state(new Set<string>(["walking"]))
   let resultCount = $state<number | null>(null)
   let markersVisible = $state(true)
+  let showOutside = $state(false)
   let calculationOrigin = $state<{ lat: number; lng: number } | null>(null)
 
   // ── Estado de cálculo ─────────────────────────────────────────────────────
@@ -88,6 +90,11 @@
   function toggleMarkers() {
     markersVisible = !markersVisible
     onToggleMarkers(markersVisible)
+  }
+
+  function toggleOutside() {
+    showOutside = !showOutside
+    onToggleOutside(showOutside)
   }
 
   let debounceTimer: ReturnType<typeof setTimeout>
@@ -167,10 +174,12 @@
   }
 
   // ── Toggle transporte ─────────────────────────────────────────────────────
+  const MAX_TRANSPORTS = 2
+
   function toggleTransport(value: string) {
     if (selectedTransports.has(value)) {
       selectedTransports.delete(value)
-    } else {
+    } else if (selectedTransports.size < MAX_TRANSPORTS) {
       selectedTransports.add(value)
     }
     selectedTransports = new Set(selectedTransports)
@@ -413,9 +422,14 @@
           {/each}
         </div>
 
-        <button class="btn-toggle-markers" onclick={toggleMarkers}>
-          {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
-        </button>
+        <div class="toggle-row">
+          <button class="btn-toggle-markers" onclick={toggleMarkers}>
+            {markersVisible ? "🙈 Ocultar" : "👁 Mostrar"}
+          </button>
+          <button class="btn-toggle-markers" class:btn-toggle-active={showOutside} onclick={toggleOutside}>
+            {showOutside ? "🔍 Solo zona" : "🌐 Ver afuera"}
+          </button>
+        </div>
 
         <button class="btn-new-search" onclick={handleClear}>
           ← Nueva búsqueda
@@ -423,6 +437,21 @@
 
       {:else}
         <!-- ── Formulario de cálculo ─────────────────────────────────────── -->
+
+        {#if !loggedIn && !$tokensQuery.isLoading}
+          <!-- Overlay de login — cubre el form con blur -->
+          <div class="login-gate">
+            <div class="login-gate-content">
+              <p class="login-gate-msg">Iniciá sesión para usar Mudarg</p>
+              <a href="{API_BASE}/sign-in" target="_blank" rel="noopener" class="btn-primary btn-login-gate">
+                Iniciar sesión
+              </a>
+              <a href="{API_BASE}/sign-up" target="_blank" rel="noopener" class="login-gate-register">
+                ¿No tenés cuenta? Registrate
+              </a>
+            </div>
+          </div>
+        {/if}
 
         <!-- Dirección -->
         <div class="field">
@@ -489,13 +518,19 @@
 
         <!-- Transporte -->
         <div class="field">
-          <span class="field-label">Transporte</span>
+          <div class="field-label-row">
+            <span class="field-label">Transporte</span>
+            <span class="field-hint">máx. {MAX_TRANSPORTS}</span>
+          </div>
           <div class="transport-grid">
             {#each TRANSPORT_OPTIONS as opt (opt.value)}
+              {@const isSelected = selectedTransports.has(opt.value)}
+              {@const isDisabled = !isSelected && selectedTransports.size >= MAX_TRANSPORTS}
               <button
                 class="transport-btn"
-                class:active={selectedTransports.has(opt.value)}
-                style={selectedTransports.has(opt.value)
+                class:active={isSelected}
+                class:transport-disabled={isDisabled}
+                style={isSelected
                   ? `border-color:${opt.color};background:${opt.color}18;color:${opt.color}`
                   : ""}
                 onclick={() => toggleTransport(opt.value)}
@@ -718,11 +753,12 @@
   }
   .tab-btn:hover:not(.tab-active) { color: var(--color-foreground); }
 
-  .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
+  .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; position: relative; }
 
   .field { display: flex; flex-direction: column; gap: 5px; }
 
-  .field-label-row { display: flex; align-items: center; gap: 5px; }
+  .field-label-row { display: flex; align-items: center; gap: 5px; justify-content: space-between; }
+  .field-hint { font-size: 11px; color: var(--color-muted-foreground); }
 
   .field-label {
     font-size: 11px; font-weight: 600; color: var(--color-muted-foreground);
@@ -811,6 +847,7 @@
   }
   .transport-btn:active { transform: scale(0.98); }
   .transport-btn.active { font-weight: 600; color: var(--color-foreground); }
+  .transport-btn.transport-disabled { opacity: 0.38; cursor: not-allowed; }
 
   .token-badge { font-size: 10px; color: #f59e0b; font-weight: 700; }
 
@@ -882,6 +919,34 @@
 
   .msg-error { font-size: 12px; color: #dc2626; text-align: center; margin: 0; }
 
+  /* Login gate */
+  .login-gate {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  }
+  .login-gate-content {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 12px; padding: 24px 20px; text-align: center;
+  }
+  .login-gate-msg {
+    font-size: 13px; font-weight: 600; color: var(--color-foreground);
+    margin: 0; line-height: 1.4;
+  }
+  .btn-login-gate { width: 100%; text-align: center; text-decoration: none; }
+  .login-gate-register {
+    font-size: 11px; color: var(--color-muted-foreground);
+    text-decoration: none;
+  }
+  .login-gate-register:hover { text-decoration: underline; }
+
   /* Vista de resultados */
   .results-count {
     display: flex; flex-direction: column; align-items: center;
@@ -924,6 +989,8 @@
   .btn-new-search:hover { background: var(--color-border); }
   .btn-new-search:active { transform: scale(0.98); }
 
+  .toggle-row { display: flex; gap: 6px; }
+  .toggle-row .btn-toggle-markers { width: auto; flex: 1; }
   .btn-toggle-markers {
     width: 100%; padding: 7px; background: var(--color-muted);
     border: 1px solid var(--color-border); border-radius: var(--radius-md);
@@ -932,6 +999,7 @@
   }
   .btn-toggle-markers:hover { background: var(--color-border); }
   .btn-toggle-markers:active { transform: scale(0.98); }
+  .btn-toggle-active { background: var(--color-primary) !important; color: var(--color-primary-foreground) !important; border-color: var(--color-primary) !important; }
 
   /* Historial */
   .history-list { display: flex; flex-direction: column; gap: 8px; }
