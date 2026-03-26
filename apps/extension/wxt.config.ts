@@ -1,5 +1,7 @@
 import { defineConfig } from "wxt"
 
+const apiBase = process.env.WXT_API_BASE ?? "http://localhost:3001"
+
 // Ver: https://wxt.dev/api/config.html
 export default defineConfig({
   extensionApi: "chrome",
@@ -17,7 +19,7 @@ export default defineConfig({
     description:
       "Enriquecé tu búsqueda en portales inmobiliarios",
     permissions: ["activeTab", "storage", "tabs"],
-    host_permissions: ["http://localhost:3001/*"],
+    host_permissions: [`${apiBase}/*`],
     icons: {
       16: "icon16.png",
       48: "icon48.png",

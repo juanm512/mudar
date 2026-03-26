@@ -13,7 +13,7 @@
   })
   setQueryClientContext(queryClient)
 
-  const API_BASE = "http://localhost:3001"
+  const API_BASE = import.meta.env.WXT_API_BASE as string
 
   // Sesión desde better-auth (no expuesta en oRPC)
   let session = $state<{ email: string } | null>(null)

@@ -222,7 +222,7 @@ export default defineContentScript({
         const sel = hiddenNth.map(n => `.leaflet-marker-pane > :nth-child(${n})`).join(",")
         if (showOutsideMarkers) {
           // Visible pero atenuado — el usuario puede verlos pero están fuera de la zona
-          style.textContent = `${sel}{opacity:0.25!important}`
+          style.textContent = `${sel}{opacity:0.75!important;filter:grayscale(100%)!important}`
         } else {
           style.textContent = `${sel}{opacity:0!important;pointer-events:none!important}`
         }

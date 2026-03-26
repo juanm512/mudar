@@ -132,7 +132,7 @@
     loggedIn && tokens !== null && tokens <= 3 && !upsellDismissed
   )
 
-  const API_BASE = "http://localhost:3001"
+  const API_BASE = import.meta.env.WXT_API_BASE as string
 
   // Notificar cambio de origen al overlay
   $effect(() => {
@@ -395,7 +395,7 @@
       {#if viewMode === "results"}
         <!-- ── Vista de resultados ──────────────────────────────────────── -->
         <div class="results-count">
-          <span class="results-number">{resultCount ?? "—"}</span>
+          <span class="results-number">{resultCount ? resultCount : "—"}</span>
           <span class="results-sub">propiedades a {timeMinutes} min</span>
         </div>
 
@@ -416,7 +416,7 @@
                 onclick={() => toggleLayer(transport)}
                 title={hidden ? "Mostrar zona" : "Ocultar zona"}
               >
-                {hidden ? "👁" : "🙈"}
+                {hidden ? "👁️" : "❌"}
               </button>
             </div>
           {/each}
@@ -424,7 +424,7 @@
 
         <div class="toggle-row">
           <button class="btn-toggle-markers" onclick={toggleMarkers}>
-            {markersVisible ? "🙈 Ocultar" : "👁 Mostrar"}
+            {markersVisible ? "❌ Ocultar" : "👁️ Mostrar"}
           </button>
           <button class="btn-toggle-markers" class:btn-toggle-active={showOutside} onclick={toggleOutside}>
             {showOutside ? "🔍 Solo zona" : "🌐 Ver afuera"}
@@ -617,7 +617,7 @@
 
         <!-- Toggle marcadores -->
         <button class="btn-toggle-markers" onclick={toggleMarkers}>
-          {markersVisible ? "🙈 Ocultar propiedades" : "👁 Mostrar propiedades"}
+          {markersVisible ? "❌ Ocultar propiedades" : "👁️ Mostrar propiedades"}
         </button>
 
         <!-- Estado / error -->
@@ -679,12 +679,19 @@
   >
     <span class="panel-title">Mudarg</span>
     <div class="mini-actions">
+      <span>{resultCount ? "📍" + resultCount : null}</span>
       <button
         class="mini-btn"
         title={markersVisible ? "Ocultar propiedades" : "Mostrar propiedades"}
         onmousedown={(e) => e.stopPropagation()}
         onclick={toggleMarkers}
-      >{markersVisible ? "🙈" : "👁"}</button>
+      >{markersVisible ? "❌" : "👁️"}</button>
+      <button
+        class="mini-btn"
+        title={showOutside ? "Ocultar propiedades fuera del area" : "Mostrar propiedades fuera del area"}
+        onmousedown={(e) => e.stopPropagation()}
+        onclick={toggleOutside}
+      >{showOutside ? "🔍" : "🌐"}</button>
       <button
         class="mini-expand"
         title="Abrir panel"

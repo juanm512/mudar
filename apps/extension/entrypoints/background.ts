@@ -6,7 +6,7 @@ import { RPCLink } from "@orpc/client/fetch"
 import type { RouterClient } from "@orpc/server"
 import type { AppRouter } from "@mudar/api"
 
-const API_BASE = "http://localhost:3001/api/orpc"
+const API_BASE = `${import.meta.env.WXT_API_BASE}/api/orpc`
 
 // Cliente fetch hacia el servidor — el background puede usar credentials sin restricciones CORS del content script
 const fetchLink = new RPCLink({
