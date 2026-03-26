@@ -1,5 +1,6 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import Image from "next/image"
 
 export const metadata: Metadata = {
   title: "Mudarg — Buscá propiedades por tiempo de viaje",
@@ -16,7 +17,7 @@ export default function LandingPage() {
       <section className="w-full max-w-6xl px-6 py-20 pb-16 pt-32 text-center md:py-32">
         <div className="mx-auto mb-6 inline-flex animate-fade-in-up items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700 shadow-sm transition-transform hover:scale-105">
           <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-          Disponible para Chrome y Edge
+          Disponible para Chrome y Edge (por ahora solo en Argenprop)
         </div>
 
         <h1 className="mx-auto mb-6 max-w-4xl animate-fade-in-up text-5xl font-extrabold tracking-tight text-gray-900 sm:text-7xl">
@@ -29,7 +30,7 @@ export default function LandingPage() {
 
         <div className="flex animate-fade-in-up flex-col items-center justify-center gap-4 sm:flex-row">
           <a
-            href="https://chrome.google.com/webstore"
+            href={process.env.NEXT_PUBLIC_EXTENSION_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="group flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl sm:w-auto"
@@ -45,7 +46,8 @@ export default function LandingPage() {
         <div className="relative mt-16 mx-auto max-w-5xl animate-fade-in-up rounded-2xl border border-gray-200 bg-gray-50 p-2 shadow-2xl transition-all hover:shadow-blue-900/10 sm:mt-24 sm:p-4">
           <div className="aspect-[16/9] w-full overflow-hidden rounded-xl bg-gray-200 relative group">
             <div className="absolute inset-0 flex items-center justify-center bg-gray-800 text-white/50 pattern-grid-lg">
-              <span className="text-xl font-medium">📸 Mockup: Mapa Antes vs Mapa Después</span>
+              {/* <span className="text-xl font-medium">📸 Mockup: Mapa Antes vs Mapa Después</span> */}
+              <Image src="/images/mockup.png" alt="extensión en funcionamiento" width={800} height={800} className="w-full h-full object-cover" />
             </div>
             {/* Overlay hint */}
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900/50 flex items-end p-6 opacity-0 transition-opacity group-hover:opacity-100">
@@ -68,7 +70,8 @@ export default function LandingPage() {
           </div>
           
           <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 shadow-xl bg-white aspect-[16/9] flex items-center justify-center">
-              <span className="text-gray-400 font-medium">🎥 Video / GIF interactivo demostrando la extensión</span>
+              {/* <span className="text-gray-400 font-medium">🎥 Video / GIF interactivo demostrando la extensión</span> */}
+              <Image src="/images/muestra-extension.gif" alt="extensión en funcionamiento" width={800} height={800} className="w-full h-full object-cover" />
           </div>
         </div>
       </section>
@@ -89,7 +92,7 @@ export default function LandingPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">El problema actual</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">El problema</h3>
                     <p className="mt-1 text-gray-600">Perdés horas abriendo cada propiedad en una pestaña nueva, copiando la dirección y calculando cuánto tardás al trabajo en Google Maps.</p>
                   </div>
                 </div>
@@ -100,14 +103,15 @@ export default function LandingPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">La solución con Mudarg</h3>
-                    <p className="mt-1 text-gray-600">Ves el tiempo de viaje directo en el mapa de Argenprop sin salir de la página. Minimizás la fricción y comparás al instante.</p>
+                    <h3 className="text-lg font-semibold text-gray-900">Te lo solucionamos</h3>
+                    <p className="mt-1 text-gray-600">Ves el tiempo de viaje directo en el mapa sin salir de la página. Minimizás la fricción y comparás al instante.</p>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="relative aspect-square md:aspect-auto md:h-full w-full rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
-               <span className="text-gray-400 font-medium px-4 text-center">🖼️ Captura de pantalla: Una vista de propiedad limpia con métricas de Mudarg</span>
+            <div className="relative aspect-square md:aspect-auto md:h-full w-full overflow-hidden rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
+               {/* <span className="text-gray-400 font-medium px-4 text-center">🖼️ Captura de pantalla: Una vista de propiedad limpia con métricas de Mudarg</span> */}
+               <Image src="/images/filtro-con-externos.png" alt="extensión en funcionamiento" width={800} height={800} className="w-full h-full object-cover" />
             </div>
           </div>
         </div>
@@ -195,13 +199,13 @@ export default function LandingPage() {
       <section className="w-full bg-blue-600 py-20 text-white">
         <div className="mx-auto max-w-4xl px-6 text-center">
           <h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
-            ¿Listo para encontrar piso más rápido?
+            ¿Listo para encontrar propiedades más rápido?
           </h2>
           <p className="mb-10 text-lg text-blue-100">
             Unite a los usuarios que ya están ahorrando horas de búsqueda en portales inmobiliarios.
           </p>
           <a
-            href="https://chrome.google.com/webstore"
+            href={process.env.NEXT_PUBLIC_EXTENSION_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center rounded-xl bg-white px-8 py-4 text-lg font-semibold text-blue-600 shadow-md transition-all hover:scale-105 hover:bg-gray-50"

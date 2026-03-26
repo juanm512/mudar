@@ -38,3 +38,4 @@ yarn-error.log*
 # build outputs
 dist/
 apps/extension/.env.production
+.env.prod

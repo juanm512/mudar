@@ -1,7 +1,5 @@
 import { defineConfig } from "wxt"
 
-const apiBase = process.env.WXT_API_BASE ?? "http://localhost:3001"
-
 // Ver: https://wxt.dev/api/config.html
 export default defineConfig({
   extensionApi: "chrome",
@@ -19,7 +17,9 @@ export default defineConfig({
     description:
       "Enriquecé tu búsqueda en portales inmobiliarios",
     permissions: ["activeTab", "storage", "tabs"],
-    host_permissions: [`${apiBase}/*`],
+    // Incluimos ambos para que dev y prod funcionen sin depender de process.env en config.
+    // El código usa import.meta.env.WXT_API_BASE que Vite reemplaza correctamente en build.
+    host_permissions: ["http://localhost:3001/*", "https://mudarg.com/*"],
     icons: {
       16: "icon16.png",
       48: "icon48.png",
