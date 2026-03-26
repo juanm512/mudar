@@ -1,8 +1,7 @@
 // Webhook handler para eventos de Rebill
 // Docs: https://docs.rebill.com/guides/webhooks
 
-import { db, tokens, tokenOrders } from "@mudar/db"
-import { eq, and } from "drizzle-orm"
+import { db, tokens, tokenOrders, eq, and } from "@mudar/db"
 
 const REBILL_WEBHOOK_SECRET = process.env.REBILL_WEBHOOK_SECRET
 
