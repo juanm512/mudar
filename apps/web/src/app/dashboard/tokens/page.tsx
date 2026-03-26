@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Suspense } from "react"
 
 import { useSession } from "@/lib/auth-client"
 import { orpc } from "@/lib/orpc-client"
@@ -39,7 +39,7 @@ function formatArs(cents: number): string {
   }).format(cents / 100)
 }
 
-export default function TokensPage() {
+function TokensPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session, isPending } = useSession()
@@ -251,5 +251,13 @@ export default function TokensPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function TokensPage() {
+  return (
+    <Suspense>
+      <TokensPageContent />
+    </Suspense>
   )
 }
