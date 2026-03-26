@@ -46,5 +46,5 @@ export default defineBackground(() => {
   browser.runtime.onConnect.addListener((port) => {
     handler.upgrade(port, { context: {} })
   })
-  console.log("[Mudar] background script cargado ✅")
+  // console.log("[Mudar] background script cargado ✅")
 })

@@ -215,7 +215,6 @@
         onCalculate(geojson, rings, lat, lng, transports[i]!)
         layers.push({ transport: transports[i]!, geojson })
       }
-      void queryClient.invalidateQueries({ queryKey: orpc.tokens.balance.queryOptions().queryKey })
       saveToCache({ lat, lng, time: timeMinutes * 60, address }, layers)
       loadHistory()
       hasResults = true
@@ -223,12 +222,14 @@
       hiddenLayers = new Set()
       viewMode = "results"
     } catch (err: unknown) {
+      // console.log(err)
       const e = err as { message?: string; code?: string }
       if (e?.message === "NO_COVERAGE") calculationError = "NO_COVERAGE"
       else if (e?.code === "FORBIDDEN") calculationError = "FORBIDDEN"
       else if (e?.code === "UNAUTHORIZED") calculationError = "UNAUTHORIZED"
       else calculationError = "UNKNOWN"
     } finally {
+      void queryClient.invalidateQueries({ queryKey: orpc.tokens.balance.queryOptions().queryKey })
       isCalculating = false
     }
   }

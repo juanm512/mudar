@@ -23,7 +23,7 @@ export default defineContentScript({
   cssInjectionMode: "ui",
 
   main(ctx) {
-    console.log("[Mudar] content script cargado ✅")
+    // console.log("[Mudar] content script cargado ✅")
 
     // ── Utilidades de mapa ──────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ export default defineContentScript({
       const mapPane = container?.querySelector(".leaflet-map-pane") as HTMLElement | null
       const tile = container?.querySelector(".leaflet-tile") as HTMLImageElement | null
       if (mapPane && tile?.src) { cb(container!, mapPane); return }
-      if (retries <= 0) { console.warn("[Mudar] mapa no encontrado"); return }
+      if (retries <= 0) { /* console.warn("[Mudar] mapa no encontrado") */ return }
       setTimeout(() => waitForArgenMap(cb, retries - 1), 500)
     }
 
@@ -210,7 +210,7 @@ export default defineContentScript({
 
       // Cancelar si llegó una versión más nueva mientras calculábamos
       if (version !== filterVersion) {
-        console.debug(`[Mudar:filter v${version}] cancelado`)
+        // console.debug(`[Mudar:filter v${version}] cancelado`)
         return
       }
 
@@ -230,10 +230,10 @@ export default defineContentScript({
       const writeMs = performance.now() - tWrite
 
       const totalMs = performance.now() - tStart
-      console.debug(
-        `[Mudar:filter v${version}] ✅ | ${icons.length} markers | dentro: ${count}/${icons.length} | ` +
-        `read: ${readMs.toFixed(1)}ms | math: ${mathMs.toFixed(1)}ms | write: ${writeMs.toFixed(1)}ms | total: ${totalMs.toFixed(1)}ms`
-      )
+      // console.debug(
+      //   `[Mudar:filter v${version}] ✅ | ${icons.length} markers | dentro: ${count}/${icons.length} | ` +
+      //   `read: ${readMs.toFixed(1)}ms | math: ${mathMs.toFixed(1)}ms | write: ${writeMs.toFixed(1)}ms | total: ${totalMs.toFixed(1)}ms`
+      // )
       panelInstance?.setResultCount?.(count)
     }
 
@@ -275,7 +275,7 @@ export default defineContentScript({
     }
 
     waitForArgenMap(async (argenContainer, mapPane) => {
-      console.log("[Mudar] mapa detectado ✅")
+      // console.log("[Mudar] mapa detectado ✅")
 
       // ── Crear overlay Leaflet ──────────────────────────────────────────
       const overlayDiv = document.createElement("div")
@@ -307,7 +307,7 @@ export default defineContentScript({
       // Tile layer transparente — Leaflet necesita uno para inicializar la proyección
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { opacity: 0 }).addTo(ourMap)
 
-      console.log("[Mudar] overlay Leaflet creado ✅")
+      // console.log("[Mudar] overlay Leaflet creado ✅")
 
       // ── Click en mapa para pick de origen ────────────────────────────
       argenContainer.addEventListener("click", async (e) => {
@@ -368,7 +368,7 @@ export default defineContentScript({
                     if (lat < minLat) minLat = lat
                     if (lat > maxLat) maxLat = lat
                   }
-                  console.debug(`[Mudar] ring: ${rawRing.length} → ${n} vértices (simplificado)`)
+                  // console.debug(`[Mudar] ring: ${rawRing.length} → ${n} vértices (simplificado)`)
                   return { ring, minLng, minLat, maxLng, maxLat }
                 })
                 allPolyRings.set(transport, cachedPolyRings)
@@ -424,7 +424,7 @@ export default defineContentScript({
       ui.mount()
 
       const cached = getLastCache()
-      if (cached) console.log("[Mudar] caché disponible")
+      // if (cached) console.log("[Mudar] caché disponible")
 
       // ── MutationObservers para sincronizar overlay en pan/zoom ────────
 
@@ -464,7 +464,7 @@ export default defineContentScript({
       })
       if (markerPane) markerObserver.observe(markerPane, { childList: true, subtree: true })
 
-      console.log("[Mudar] observers conectados ✅")
+      // console.log("[Mudar] observers conectados ✅")
 
       // @ts-expect-error — debug
       window.__mudar = {
