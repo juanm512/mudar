@@ -18,6 +18,7 @@ export const tokenPacks = pgTable("token_packs", {
   tokens: integer("tokens").notNull(),
   priceArs: integer("price_ars").notNull(),
   active: boolean("active").default(true).notNull(),
+  polarProductId: text("polar_product_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 

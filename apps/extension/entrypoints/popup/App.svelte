@@ -65,6 +65,37 @@
   function openTokens() {
     chrome.tabs.create({ url: `${API_BASE}/dashboard/tokens` })
   }
+
+  function openArgenprop() {
+    chrome.tabs.create({ url: "https://www.argenprop.com/departamentos/alquiler/capital-federal?vista-mapa" })
+  }
+
+  // ── Review prompt ─────────────────────────────────────────────────────────
+  const CWS_REVIEW_URL = "https://chromewebstore.google.com/detail/lgjjgiakhhjapobkdkpbinecjefekdhb/reviews"
+  const REVIEW_THRESHOLD = 5
+
+  let showReviewPrompt = $state(false)
+
+  $effect(() => {
+    if (!session) return
+    chrome.storage.local.get(["popupOpenCount", "reviewDismissed"]).then((data) => {
+      if (data.reviewDismissed) return
+      const count = ((data.popupOpenCount as number) ?? 0) + 1
+      chrome.storage.local.set({ popupOpenCount: count })
+      if (count >= REVIEW_THRESHOLD) showReviewPrompt = true
+    })
+  })
+
+  function openReview() {
+    chrome.tabs.create({ url: CWS_REVIEW_URL })
+    chrome.storage.local.set({ reviewDismissed: true })
+    showReviewPrompt = false
+  }
+
+  function dismissReview() {
+    chrome.storage.local.set({ reviewDismissed: true })
+    showReviewPrompt = false
+  }
 </script>
 
 <main class="popup">
@@ -136,6 +167,18 @@
       </button>
     </div>
   {/if}
+  {#if showReviewPrompt}
+    <div class="review-banner">
+      <span class="review-text">⭐ ¿Te gusta Mudarg? Dejanos una reseña</span>
+      <div class="review-actions">
+        <button class="btn-review" onclick={openReview}>Calificar</button>
+        <button class="btn-dismiss" onclick={dismissReview}>✕</button>
+      </div>
+    </div>
+  {/if}
+  <footer class="popup-footer">
+    <button class="btn-portal" onclick={openArgenprop}>Ir a Argenprop</button>
+  </footer>
 </main>
 
 <style>
@@ -196,6 +239,35 @@
     font-size: 11px; cursor: pointer; text-decoration: underline;
   }
   .btn-link:hover { color: #1a56db; }
+
+  .popup-footer {
+    padding: 8px 14px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .btn-portal {
+    display: block; width: 100%; text-align: center; padding: 6px;
+    background: none; border: 1px solid #d1d5db; border-radius: 6px;
+    color: #374151; font-size: 11px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn-portal:hover { background: #f9fafb; border-color: #9ca3af; }
+
+  .review-banner {
+    padding: 8px 14px; background: #fefce8; border-top: 1px solid #fde68a;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .review-text { font-size: 11px; color: #92400e; }
+  .review-actions { display: flex; gap: 6px; }
+  .btn-review {
+    flex: 1; padding: 5px; background: #f59e0b; color: #fff; border: none;
+    border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .btn-review:hover { background: #d97706; }
+  .btn-dismiss {
+    padding: 5px 8px; background: none; border: 1px solid #fde68a;
+    border-radius: 5px; font-size: 11px; color: #92400e; cursor: pointer;
+  }
+  .btn-dismiss:hover { background: #fde68a; }
 
   /* Loading Logo */
   .loading-logo {

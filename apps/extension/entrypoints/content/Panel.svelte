@@ -148,7 +148,7 @@
 
   async function searchAddress() {
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&countrycodes=ar&limit=5`
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&countrycodes=ar&viewbox=-73.56,-21.78,-53.64,-55.06&bounded=0&limit=5`
       const res = await fetch(url, { headers: { "User-Agent": "Mudarg-Extension/1.0" } })
       suggestions = (await res.json()) as NominatimResult[]
       showSuggestions = suggestions.length > 0
@@ -221,6 +221,11 @@
       resultTransports = transports
       hiddenLayers = new Set()
       viewMode = "results"
+      chrome.runtime.sendMessage({
+        type: "track",
+        name: "calculation_performed",
+        params: { transports: transports.join(","), time_minutes: timeMinutes, transport_count: transports.length },
+      })
     } catch (err: unknown) {
       // console.log(err)
       const e = err as { message?: string; code?: string }
@@ -784,18 +789,19 @@
     display: none;
     position: absolute;
     top: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+    right: 0;
     background: #1f2937;
     color: #fff;
     font-size: 11px;
     line-height: 1.4;
     padding: 6px 8px;
     border-radius: 6px;
-    white-space: nowrap;
+    white-space: normal;
+    max-width: 180px;
+    width: max-content;
     z-index: 2147483647;
     pointer-events: none;
-    text-align: center;
+    text-align: left;
   }
 
   .info-icon:hover .tooltip,

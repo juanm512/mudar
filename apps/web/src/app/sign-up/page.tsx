@@ -4,6 +4,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
+declare global { interface Window { dataLayer?: Record<string, unknown>[] } }
+
 import { translateAuthError } from "@/lib/auth-errors"
 import { signIn, signUp, useSession } from "@/lib/auth-client"
 
@@ -38,6 +40,7 @@ export default function SignUpPage() {
       return
     }
 
+    window.dataLayer?.push({ event: "sign_up", method: "email" })
     setSuccess(true)
     setLoading(false)
   }

@@ -111,6 +111,9 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.2.4(react@19.2.4)
+      resend:
+        specifier: ^6.9.4
+        version: 6.9.4
     devDependencies:
       '@mudar/eslint-config':
         specifier: workspace:*
@@ -151,9 +154,9 @@ importers:
       '@mudar/geo':
         specifier: workspace:*
         version: link:../geo
-      '@mudar/rebill':
+      '@mudar/polar':
         specifier: workspace:*
-        version: link:../rebill
+        version: link:../polar
       '@orpc/server':
         specifier: ^1.0.0
         version: 1.13.10(@opentelemetry/api@1.9.0)
@@ -238,6 +241,25 @@ importers:
 
   packages/geo:
     dependencies:
+      '@t3-oss/env-core':
+        specifier: ^0.11.0
+        version: 0.11.1(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@mudar/typescript-config':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
+  packages/polar:
+    dependencies:
+      '@polar-sh/sdk':
+        specifier: latest
+        version: 0.46.7
       '@t3-oss/env-core':
         specifier: ^0.11.0
         version: 0.11.1(typescript@5.9.3)(zod@3.25.76)
@@ -1655,6 +1677,9 @@ packages:
   '@pnpm/npm-conf@3.0.2':
     resolution: {integrity: sha512-h104Kh26rR8tm+a3Qkc5S4VLYint3FE48as7+/5oCEcKR2idC/pF1G6AhIXKI+eHPJa/3J9i5z0Al47IeGHPkA==}
     engines: {node: '>=12'}
+
+  '@polar-sh/sdk@0.46.7':
+    resolution: {integrity: sha512-g8/goRQFfnik9Ood2Ej5AsbEXv2rohzhVlmW7wjkCuwdc8i59FWhdBjolX2tUwcXXjugziXrhCZJLivY3W6ytQ==}
 
   '@prisma/client@5.22.0':
     resolution: {integrity: sha512-M0SVXfyHnQREBKxCgyo7sffrKttwE6R8PMq330MIUF0pTwjUhLbW84pFDlf06B27XyCR++VtjugEnIHdr07SVA==}
@@ -6173,6 +6198,11 @@ snapshots:
       '@pnpm/config.env-replace': 1.1.0
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
+
+  '@polar-sh/sdk@0.46.7':
+    dependencies:
+      standardwebhooks: 1.0.0
+      zod: 3.25.76
 
   '@prisma/client@5.22.0': {}
 

@@ -6,6 +6,8 @@ import { useEffect, useState, useCallback, Suspense } from "react"
 import { useSession } from "@/lib/auth-client"
 import { orpc } from "@/lib/orpc-client"
 
+declare global { interface Window { dataLayer?: Record<string, unknown>[] } }
+
 interface TokenPack {
   id: string
   name: string
@@ -70,6 +72,14 @@ function TokensPageContent() {
   async function handlePurchase(packId: string) {
     setPurchasing(packId)
     try {
+      const pack = packs.find(p => p.id === packId)
+      window.dataLayer?.push({
+        event: "begin_checkout",
+        pack_name: pack?.name,
+        tokens: pack?.tokens,
+        value: pack ? pack.priceArs / 100 : undefined,
+        currency: "ARS",
+      })
       const { checkoutUrl } = await orpc.tokens.purchase({ packId })
       window.location.href = checkoutUrl
     } catch (err) {
@@ -77,6 +87,16 @@ function TokensPageContent() {
       setPurchasing(null)
     }
   }
+
+  useEffect(() => {
+    if (paymentStatus !== "success" || transactions.length === 0) return
+    const lastPurchase = [...transactions].reverse().find(t => t.reason === "purchase")
+    window.dataLayer?.push({
+      event: "purchase",
+      currency: "ARS",
+      tokens: lastPurchase?.amount,
+    })
+  }, [paymentStatus, transactions])
 
   if (isPending || !session) {
     return (
@@ -136,7 +156,7 @@ function TokensPageContent() {
         )}
 
         {/* Packs grid */}
-        <div className="mb-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mb-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {packs.map((pack) => {
             const isPro = pack.name === "Búsqueda completa"
             return (

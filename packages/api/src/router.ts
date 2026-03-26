@@ -3,7 +3,7 @@ import { eq, sum } from "drizzle-orm"
 
 import { db, tokens, calculations, tokenPacks, tokenOrders } from "@mudar/db"
 import { TravelTimeProvider, NoCoverageError } from "@mudar/geo"
-import { createPaymentLink } from "@mudar/rebill"
+import { createCheckoutSession } from "@mudar/polar"
 import { ORPCError } from "@orpc/server"
 import { authedProcedure } from "./middleware"
 
@@ -122,7 +122,11 @@ const tokensPurchase = authedProcedure
       throw new ORPCError("NOT_FOUND", { message: "Pack no encontrado" })
     }
 
-    // Crear orden en estado "pending" — se completará vía webhook de Rebill
+    if (!pack.polarProductId) {
+      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Pack sin producto configurado en Polar" })
+    }
+
+    // Crear orden en estado "pending" — se completará vía webhook de Polar
     const [order] = await db
       .insert(tokenOrders)
       .values({
@@ -131,17 +135,15 @@ const tokensPurchase = authedProcedure
         tokensGranted: pack.tokens,
         pricePaid: pack.priceArs,
         status: "pending",
-        paymentProvider: "rebill",
+        paymentProvider: "polar",
       })
       .returning()
 
-    // Generar Payment Link de un solo uso en Rebill
-    const { checkoutUrl } = await createPaymentLink({
+    // Crear Checkout Session en Polar
+    const { checkoutUrl } = await createCheckoutSession({
+      polarProductId: pack.polarProductId,
       orderId: order!.id,
       userId: context.user.id,
-      packName: pack.name,
-      priceArsCents: pack.priceArs,
-      tokens: pack.tokens,
       userEmail: context.user.email,
     })
 
