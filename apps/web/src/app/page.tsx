@@ -1,6 +1,8 @@
-import Link from "next/link"
 import type { Metadata } from "next"
 import Image from "next/image"
+import Link from "next/link"
+
+import { Footer } from "@/components/footer"
 
 export const metadata: Metadata = {
   title: "Mudarg — Buscá propiedades por tiempo de viaje",
@@ -215,20 +217,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 7. Footer */}
-      <footer className="w-full border-t border-gray-200 bg-white py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 md:flex-row">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-gray-900">Mudarg</span>
-            <span className="text-sm text-gray-500">© 2026</span>
-          </div>
-          <div className="flex gap-6 text-sm text-gray-500">
-             <Link href="/terms" className="hover:text-blue-600 transition-colors">Términos</Link>
-             <Link href="/privacy" className="hover:text-blue-600 transition-colors">Privacidad</Link>
-             <a href="mailto:hola@mudarg.com" className="hover:text-blue-600 transition-colors">Contacto</a>
-          </div>
-        </div>
-      </footer>
     </main>
   )
 }

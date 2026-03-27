@@ -89,7 +89,7 @@ const tokensBalance = authedProcedure.handler(async ({ context }) => {
       userId: context.user.id,
       amount: INITIAL_TOKENS,
       reason: "initial_grant",
-    })
+    }).onConflictDoNothing()
     return { tokens: INITIAL_TOKENS }
   }
 

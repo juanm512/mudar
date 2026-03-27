@@ -7,7 +7,9 @@ import {
   uuid,
   real,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 import { user } from "./auth-schema"
 
@@ -49,7 +51,13 @@ export const tokens = pgTable("tokens", {
   reason: text("reason").notNull(), // "initial_grant" | "purchase" | "isochrone" | "bonus" | "refund"
   orderId: uuid("order_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-})
+}, (table) => [
+  // Garantiza que solo pueda existir un initial_grant por usuario a nivel de DB,
+  // previniendo race conditions si tokens.balance se llama en paralelo.
+  uniqueIndex("tokens_user_initial_grant_unique")
+    .on(table.userId)
+    .where(sql`${table.reason} = 'initial_grant'`),
+])
 
 // ── Historial de cálculos de isócronas ───────────────────────────────────────
 export const calculations = pgTable("calculations", {

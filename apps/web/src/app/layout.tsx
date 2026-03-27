@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Script from "next/script"
 
+import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import "./styles.css"
 
@@ -44,7 +45,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>
+      <body className="flex min-h-screen flex-col">
         {GTM_ID && (
           <noscript>
             <iframe
@@ -57,6 +58,7 @@ export default function RootLayout({
         )}
         <Header />
         {children}
+        <Footer />
         {GTM_ID && (
           <Script id="gtm-init" strategy="afterInteractive">{`
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
