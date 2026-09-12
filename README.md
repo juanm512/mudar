@@ -79,8 +79,21 @@ mudar/
 4. La llamada a la API sale por el **background script** de la extensión, que hace de proxy vía `RPCLink` sobre un message port. Así se evitan problemas de CORS y credenciales.
 5. El servidor (`@mudar/api`) verifica el saldo de tokens **antes** de llamar a TravelTime. Si la zona no tiene cobertura, no se descuenta nada.
 6. TravelTime devuelve un polígono GeoJSON. El servidor guarda solo los metadatos del cálculo en `calculations` y descuenta el token.
-7. La extensión dibuja el polígono en un segundo mapa Leaflet superpuesto al del portal y filtra los marcadores según estén dentro de alguna zona activa.
+7. La extensión dibuja el polígono en un mapa Leaflet espejado sobre el del portal y filtra los marcadores según estén dentro de alguna zona activa (ver [el desafío técnico](#el-desafío-técnico-un-mapa-que-no-se-puede-tocar)).
 8. El GeoJSON se cachea en `localStorage` para poder recargarlo sin consumir tokens.
+
+### El desafío técnico: un mapa que no se puede tocar
+
+El mayor obstáculo del proyecto, y el que lo frenó por un tiempo, fue que **no hay forma de acceder al mapa de ArgenProp desde la extensión**. Los content scripts de Chrome corren en un contexto JavaScript aislado, así que no se puede leer la instancia de Leaflet del portal, ni sus coordenadas, ni sus parámetros, ni agregarle capas. El mapa era, en la práctica, una caja negra.
+
+La solución fue **espejar el mapa**:
+
+1. La extensión crea un **segundo mapa Leaflet propio, totalmente invisible**, superpuesto al del portal y con `pointer-events: none` para no interferir con la interacción del usuario.
+2. Para saber dónde está el mapa original, lee lo único que sí es visible desde el DOM: los **tiles**. De la URL de un tile se obtienen `z/x/y` y, con su posición en pantalla, se puede calcular a qué latitud y longitud corresponde cada píxel del contenedor.
+3. Con esa referencia, el mapa espejo se mantiene **sincronizado en cada pan y zoom** con el original. Sobre él se dibujan las isócronas y el marcador de origen.
+4. Los **marcadores de propiedades sí son accesibles** como elementos del DOM. Se les calcula su coordenada con la misma proyección inversa, se evalúa si caen dentro de alguna zona activa y se ocultan o muestran con CSS según corresponda.
+
+Así el usuario ve las zonas "sobre" el mapa de ArgenProp y el filtro de propiedades funciona, sin que la extensión modifique nunca el mapa del portal.
 
 ### Tokens y pagos
 
