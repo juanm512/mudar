@@ -1,6 +1,6 @@
 # Mudarg — Buscá propiedades por tiempo de viaje
 
-**Mudarg** es una extensión de navegador que enriquece los portales inmobiliarios argentinos (ArgenProp y ZonaProp) con datos de tiempo de viaje. Dibujá sobre el mapa que ya estás usando la zona a la que llegás en N minutos caminando, en bici, en auto o en transporte público, y quedate solo con las propiedades que entran en esa zona.
+**Mudarg** es una extensión de navegador que enriquece el portal inmobiliario ArgenProp con datos de tiempo de viaje. Dibujá sobre el mapa que ya estás usando la zona a la que llegás en N minutos caminando, en bici, en auto o en transporte público, y quedate solo con las propiedades que entran en esa zona.
 
 🌐 Web y dashboard: [mudar-web.vercel.app](https://mudar-web.vercel.app/) · Dominio: [mudarg.com](https://mudarg.com)
 
@@ -32,7 +32,7 @@
 
 ## ✨ Funcionalidades
 
-- 🗺️ **Isócronas sobre el mapa real** de ArgenProp y ZonaProp. La zona se dibuja como overlay y se sincroniza con el pan/zoom del mapa original.
+- 🗺️ **Isócronas sobre el mapa real** de ArgenProp. La zona se dibuja como overlay y se sincroniza con el pan/zoom del mapa original.
 - 🔍 **Búsqueda por dirección** con autocompletado (Nominatim / OpenStreetMap) o usando el centro del mapa como origen.
 - 🚶🚲🚗🚌 **Cuatro medios de transporte**: caminando, bicicleta, auto y transporte público, con un color de polígono por transporte.
 - 🔀 **Multi-transporte**: hasta dos zonas simultáneas para comparar, por ejemplo, "20 min en bici" contra "20 min en colectivo".
@@ -45,7 +45,7 @@
 ## 🚀 Cómo se usa
 
 1. Creá tu cuenta en [mudar-web.vercel.app](https://mudar-web.vercel.app/) e instalá la extensión (gratis).
-2. Abrí ArgenProp o ZonaProp y navegá como siempre. Aparece el panel de Mudarg sobre el mapa.
+2. Abrí ArgenProp y navegá como siempre. Aparece el panel de Mudarg sobre el mapa.
 3. Escribí una dirección o usá el centro del mapa como origen.
 4. Elegí el tiempo máximo y uno o dos medios de transporte.
 5. Calculá. La zona se dibuja sobre el mapa y podés dejar visibles solo las propiedades dentro de ella.
@@ -196,7 +196,7 @@ Lo que cambió:
 | Formato | Web app propia | Extensión que se integra al portal inmobiliario |
 | Isócronas | Algoritmo propio sobre datos GTFS + OpenRouteService | TravelTime API |
 | Cobertura | Solo CABA | Toda la cobertura de TravelTime en Argentina |
-| Propiedades | No integraba inmobiliarias | Filtra los listings reales de ArgenProp y ZonaProp |
+| Propiedades | No integraba inmobiliarias | Filtra los listings reales de ArgenProp |
 | Backend | Flask + Shapely | Next.js + oRPC + Drizzle + PostgreSQL |
 | Cuentas y pagos | No tenía | Auth, tokens y packs de pago |
 
