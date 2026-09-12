@@ -4,7 +4,7 @@
 
 🌐 Web y dashboard: [mudar-web.vercel.app](https://mudar-web.vercel.app/) · Dominio: [mudarg.com](https://mudarg.com)
 
-> Este repositorio es el **producto en producción**. Es la evolución de [`relocate-app`](https://github.com/juanm512/relocate-app), el MVP en Flask + Leaflet que validó la idea de "mapa de alcance" para CABA. Más abajo se explica la relación entre ambos.
+> Este repositorio es el **producto en producción**. Es la evolución de [`relocate-app`](https://github.com/juanm512/relocate-app), el MVP en Flask + Leaflet que validó la idea de "mapa de alcance" para CABA.
 
 ---
 
@@ -176,49 +176,3 @@ pnpm --filter @mudar/extension zip  # empaquetar la extensión para publicar
 ```
 
 Las guías de arquitectura y las reglas para asistentes de IA están en [`claude.md`](./claude.md).
-
----
-
-## 🔬 De Relocate a Mudarg
-
-[`relocate-app`](https://github.com/juanm512/relocate-app) fue el MVP que dio origen a este proyecto: una app en **Python + Flask** con frontend en JavaScript vanilla y Leaflet que mostraba, para un punto de CABA, hasta dónde se podía vivir razonablemente según el medio de transporte.
-
-Lo que se validó ahí y sigue vivo en Mudarg:
-
-- La idea central de elegir **destino + transporte + tiempo máximo** y ver el resultado como una zona en el mapa.
-- Los medios de transporte: caminar, bici, auto y transporte público.
-- Geocoding con Nominatim y mapa base de OpenStreetMap.
-
-Lo que cambió:
-
-| | Relocate (MVP) | Mudarg (producción) |
-|---|---|---|
-| Formato | Web app propia | Extensión que se integra al portal inmobiliario |
-| Isócronas | Algoritmo propio sobre datos GTFS + OpenRouteService | TravelTime API |
-| Cobertura | Solo CABA | Toda la cobertura de TravelTime en Argentina |
-| Propiedades | No integraba inmobiliarias | Filtra los listings reales de ArgenProp |
-| Backend | Flask + Shapely | Next.js + oRPC + Drizzle + PostgreSQL |
-| Cuentas y pagos | No tenía | Auth, tokens y packs de pago |
-
-La "integración inmobiliaria" que Relocate listaba como trabajo futuro terminó siendo el producto entero.
-
-## 🤝 Contribuir
-
-1. Fork del proyecto.
-2. Creá una rama (`git checkout -b feature/nueva-funcionalidad`).
-3. Corré `pnpm typecheck` y `pnpm lint` antes de commitear.
-4. Abrí un Pull Request.
-
-## 📬 Contacto
-
-Escribinos a [ayuda@mudarg.com](mailto:ayuda@mudarg.com).
-
-## 🙏 Agradecimientos
-
-- OpenStreetMap contributors y Nominatim
-- TravelTime
-- Leaflet.js, WXT y Svelte
-
----
-
-**Hecho con ❤️ para que mudarse sea más fácil.**
